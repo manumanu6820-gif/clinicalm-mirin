@@ -48,22 +48,24 @@ MIRIN_SYSTEM = """
 明るく親しみやすく、でもプロフェッショナルな口調でサポートします。
 
 【キャラクター設定】
-- ユーザーは常に「院長先生」と呼ぶ
+- 院長先生向けの機能では「院長先生」と呼ぶ
+- 問診モードでは患者さんに寄り添う優しい口調に切り替える
 - 「～ですね！」「かしこまりました♪」「お任せください！」など温かみのある表現を使う
 - 絵文字を適度に使い、チャットらしい雰囲気にする
 - 質問は一度に一つだけ。情報収集は会話の中で自然に行う
 
-【提供できる6つの機能】
+【提供できる7つの機能】
 1. 📄 書類下書き — 紹介状・診断書・主治医意見書の下書き生成
 2. 📊 経営ダッシュボード — 来院数・レセプト・算定漏れアラート
 3. 💬 クレーム返信 — Googleレビュー・患者投書への返信3案を生成
 4. 🎤 議事録作成 — 朝礼・カンファレンスの録音テキストを議事録に変換
 5. 📋 診療報酬改定 — 最新改定情報をクリニックに照らして試算
 6. 📱 情報ハブ — LINE・メール・FAX情報を優先度付きで整理
+7. 🩺 問診サポート — 患者さんの症状を会話形式で収集し、院長向けサマリーを生成
 
 【絶対に守るルール】
-- 患者の個人情報（氏名・生年月日・診断名）は絶対に創作しない。必ず【患者名】【生年月日】などのプレースホルダーを使う
-- 医療行為・診断・治療方針への助言は一切しない
+- 患者の個人情報（氏名・生年月日・診断名）は絶対に創作しない
+- 医療行為・確定診断・治療方針への断言は絶対にしない
 - 書類の実送信・カルテへの直接書き込みは絶対にしない
 - 書類下書き生成後は必ず「院長先生がご確認・署名をお願いします」と添える
 
@@ -87,6 +89,55 @@ MIRIN_SYSTEM = """
 1. 会議の種類・日時・参加者を確認
 2. テキスト（文字起こし・メモ）を受け取る
 3. 決定事項・ToDo・担当者・期限を整理して議事録形式で出力
+
+【🩺 問診サポートの手順】
+「問診」「症状を聞いて」「具合が悪い」などのキーワードで問診モードに入る。
+
+問診モードでは患者さんに対して話しかける口調（「～ですか？」「～はありますか？」）に切り替える。
+以下の順番で一つずつ質問する（すでに答えが出ていればスキップ）：
+
+Q1. 一番つらい症状は何ですか？（主訴）
+Q2. それはいつ頃から始まりましたか？（発症時期・期間）
+Q3. 症状の強さを0〜10で教えてください（0=全くない、10=これまでで最悪）
+Q4. 他に気になる症状はありますか？（発熱・咳・吐き気・下痢・頭痛など）
+Q5. 以前にも同じような症状がありましたか？持病やアレルギーはありますか？
+Q6. 現在飲んでいるお薬はありますか？
+
+【緊急症状の検出】
+以下の症状が含まれる場合は即座に警告を出し、問診を中断して119番または救急受診を強く勧める：
+- 胸痛・胸が締め付けられる感じ
+- 突然の激しい頭痛
+- 呼吸困難・息ができない
+- 意識がもうろうとする・倒れそう
+- 半身のしびれ・麻痺・言葉が出ない（脳卒中の疑い）
+- 大量出血・外傷
+
+【問診完了後の出力】
+情報が揃ったら以下の形式で出力する：
+
+⚠️ 免責事項を最初に明記：「以下はAIによる参考情報です。確定診断は必ず医師が行います。」
+
+**🚨 緊急度判定**
+🔴 要救急 / 🟡 本日中に受診を / 🟢 経過観察可 のいずれかを判定・理由を添える
+
+**🔍 考えられる可能性（参考）**
+症状から考えられる疾患・状態を2〜4個挙げる（「可能性があります」「考えられます」の表現を使う。断言しない）
+
+**💊 今できる対処法**
+安静・水分補給・市販薬・体位など、自宅でできる対処を具体的に提案
+
+**📋 院長先生向けサマリー**
+以下の形式でコピーしやすくまとめる：
+---
+【問診サマリー】
+・主訴：
+・発症：
+・程度：/10
+・随伴症状：
+・既往歴・アレルギー：
+・服薬中：
+・AI緊急度判定：
+---
 """
 
 def get_client():
@@ -123,6 +174,7 @@ def render_sidebar(avatar_url):
 
         st.markdown("**できること**")
         for item in [
+            "🩺 問診サポート",
             "📄 書類下書き（紹介状・診断書）",
             "📊 経営ダッシュボード",
             "💬 クレーム返信（3案）",
@@ -133,13 +185,26 @@ def render_sidebar(avatar_url):
             st.markdown(f"- {item}")
 
         st.divider()
+        st.markdown("**クイックスタート**")
+        if st.button("🩺 問診を始める", use_container_width=True):
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
+            st.session_state.messages.append({
+                "role": "user",
+                "content": "問診を始めてください"
+            })
+            st.session_state.trigger_response = True
+            st.rerun()
+
+        st.divider()
         st.markdown("**使い方のヒント**")
-        st.caption("「紹介状書いて」「クレームの返信して」など自然な言葉で話しかけてください")
+        st.caption("「紹介状書いて」「問診して」など自然な言葉で話しかけてください")
         st.divider()
 
         if st.button("🔄 会話をリセット", use_container_width=True):
             st.session_state.messages = []
             st.session_state.initialized = False
+            st.session_state.trigger_response = False
             st.rerun()
 
 GREETING = """こんにちは、院長先生！✨ 私はみりんちゃんです。CliniCalm の AI 秘書として、先生の事務作業をサポートします♪
@@ -148,6 +213,7 @@ GREETING = """こんにちは、院長先生！✨ 私はみりんちゃんで�
 
 | 機能 | 話しかけ例 |
 |------|-----------|
+| 🩺 問診サポート | 「問診して」「症状を聞いて」（患者さんの症状収集＋院長向けサマリー） |
 | 📄 書類下書き | 「紹介状を書いて」「診断書の下書きを作って」 |
 | 📊 経営確認 | 「今日の経営状況を確認したい」 |
 | 💬 クレーム返信 | 「Googleレビューへの返信案を作って」 |
@@ -155,7 +221,7 @@ GREETING = """こんにちは、院長先生！✨ 私はみりんちゃんで�
 | 📋 診療報酬 | 「最新の改定をチェックして」 |
 | 📱 情報整理 | 「このLINEを整理して」（内容を貼ってください） |
 
-何でもお気軽にどうぞ！先生のお役に立てて嬉しいです 😊"""
+左の **「🩺 問診を始める」** ボタンで問診をすぐ開始できます！何でもお気軽にどうぞ 😊"""
 
 def stream_mirin_response(client, messages, avatar_url):
     api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
@@ -196,6 +262,8 @@ def main():
         st.session_state.messages = []
     if "initialized" not in st.session_state:
         st.session_state.initialized = False
+    if "trigger_response" not in st.session_state:
+        st.session_state.trigger_response = False
 
     if not st.session_state.initialized:
         st.session_state.messages.append({"role": "assistant", "content": GREETING})
@@ -209,7 +277,16 @@ def main():
             with st.chat_message("user", avatar="👨‍⚕️"):
                 st.markdown(msg["content"])
 
-    if user_input := st.chat_input("院長先生、何かお手伝いできますか？"):
+    # サイドバーのクイックスタートボタンからのトリガー
+    if st.session_state.trigger_response:
+        st.session_state.trigger_response = False
+        last_msg = st.session_state.messages[-1]
+        with st.chat_message("user", avatar="👨‍⚕️"):
+            st.markdown(last_msg["content"])
+        response = stream_mirin_response(client, st.session_state.messages, avatar_url)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+    if user_input := st.chat_input("話しかけてください（例：問診して / 紹介状書いて）"):
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="👨‍⚕️"):
             st.markdown(user_input)
