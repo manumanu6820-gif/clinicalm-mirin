@@ -172,35 +172,27 @@ def render_sidebar(avatar_url):
         st.caption("CliniCalm — クリニック院長専用 AI 秘書")
         st.divider()
 
-        st.markdown("**できること**")
-        for item in [
-            "🩺 問診サポート",
-            "📄 書類下書き（紹介状・診断書）",
-            "📊 経営ダッシュボード",
-            "💬 クレーム返信（3案）",
-            "🎤 議事録作成",
-            "📋 診療報酬改定チェック",
-            "📱 情報ハブ",
-        ]:
-            st.markdown(f"- {item}")
+        st.markdown("**機能を選んでください**")
+
+        features = [
+            ("🩺 問診サポート", "問診を始めてください"),
+            ("📄 書類下書き", "書類の下書きをお願いします"),
+            ("📊 経営ダッシュボード", "今日の経営状況を確認したいです"),
+            ("💬 クレーム返信", "クレームへの返信案を作ってください"),
+            ("🎤 議事録作成", "議事録を作成してください"),
+            ("📋 診療報酬改定", "最新の診療報酬改定をチェックしてください"),
+            ("📱 情報ハブ", "情報を整理してください"),
+        ]
+
+        for label, message in features:
+            if st.button(label, use_container_width=True, key=f"btn_{label}"):
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+                st.session_state.messages.append({"role": "user", "content": message})
+                st.session_state.trigger_response = True
+                st.rerun()
 
         st.divider()
-        st.markdown("**クイックスタート**")
-        if st.button("🩺 問診を始める", use_container_width=True):
-            if "messages" not in st.session_state:
-                st.session_state.messages = []
-            st.session_state.messages.append({
-                "role": "user",
-                "content": "問診を始めてください"
-            })
-            st.session_state.trigger_response = True
-            st.rerun()
-
-        st.divider()
-        st.markdown("**使い方のヒント**")
-        st.caption("「紹介状書いて」「問診して」など自然な言葉で話しかけてください")
-        st.divider()
-
         if st.button("🔄 会話をリセット", use_container_width=True):
             st.session_state.messages = []
             st.session_state.initialized = False
