@@ -382,9 +382,10 @@ def clean_for_tts(text: str) -> str:
 
 
 def play_tts(text: str) -> None:
-    """OpenAI TTS (nova) でテキストを音声再生する。APIキー未設定時は無音でスキップ。"""
+    """OpenAI TTS (nova) でテキストを音声再生する。"""
     api_key = st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
     if not api_key:
+        st.warning("🔇 OPENAI_API_KEY が未設定です。Streamlit の Secrets に追加してください。", icon="⚠️")
         return
     try:
         from openai import OpenAI as OAI
@@ -397,15 +398,9 @@ def play_tts(text: str) -> None:
             input=clean,
             response_format="mp3",
         )
-        audio_b64 = base64.b64encode(resp.content).decode()
-        st.markdown(
-            f'<audio autoplay style="display:none">'
-            f'<source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">'
-            f'</audio>',
-            unsafe_allow_html=True,
-        )
-    except Exception:
-        pass  # TTS失敗はサイレントスキップ（メイン機能に影響させない）
+        st.audio(resp.content, format="audio/mp3", autoplay=True)
+    except Exception as e:
+        st.warning(f"🔇 音声読み上げに失敗しました: {type(e).__name__}", icon="⚠️")
 
 
 def go_home():
@@ -567,6 +562,10 @@ def render_chat(client, avatar_url):
         st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
         st.button(btn_label, on_click=_toggle_voice, key="voice_toggle", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+        if is_on:
+            has_key = bool(st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY"))
+            if not has_key:
+                st.caption("⚠️ APIキー未設定")
 
     messages = st.session_state.messages
 
