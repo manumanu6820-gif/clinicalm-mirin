@@ -66,6 +66,20 @@ div.stButton > button {
     white-space: pre-wrap;
     line-height: 1.5;
 }
+.voice-btn-on > div > button {
+    background: #D4956A !important;
+    color: white !important;
+    border: none !important;
+    min-height: 36px !important;
+    font-size: 0.85rem !important;
+}
+.voice-btn-off > div > button {
+    background: #eee !important;
+    color: #888 !important;
+    border: 1px solid #ccc !important;
+    min-height: 36px !important;
+    font-size: 0.85rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -444,10 +458,6 @@ def render_sidebar(avatar_url):
             st.session_state.need_response = False
             st.rerun()
 
-        st.divider()
-        voice_on = st.toggle("🔊 音声読み上げ", key="voice_enabled", value=False)
-        if voice_on:
-            st.caption("OpenAI TTS (nova) で読み上げます")
 
 FEATURE_SYSTEMS = {
     "x-research": X_RESEARCH_SYSTEM_EXTRA,
@@ -543,7 +553,20 @@ def render_chat(client, avatar_url):
     feature = next((f for f in FEATURES if f["key"] == mode_key), None)
     label = feature["label"] if feature else ""
 
-    st.markdown(f'<div class="mode-header">{label}</div>', unsafe_allow_html=True)
+    header_col, voice_col = st.columns([6, 1])
+    with header_col:
+        st.markdown(f'<div class="mode-header">{label}</div>', unsafe_allow_html=True)
+    with voice_col:
+        is_on = st.session_state.get("voice_enabled", False)
+
+        def _toggle_voice():
+            st.session_state.voice_enabled = not st.session_state.get("voice_enabled", False)
+
+        css_class = "voice-btn-on" if is_on else "voice-btn-off"
+        btn_label = "🔊 ON" if is_on else "🔇 OFF"
+        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+        st.button(btn_label, on_click=_toggle_voice, key="voice_toggle", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     messages = st.session_state.messages
 
