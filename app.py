@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import anthropic
 import os
@@ -351,6 +352,48 @@ def get_avatar_url():
         return f"data:image/png;base64,{b64}"
     return None
 
+def clean_for_tts(text: str) -> str:
+    """マークダウン記法を除去して読み上げ用テキストに変換する。"""
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)   # リンク → テキストのみ
+    text = re.sub(r'#{1,6}\s+', '', text)                    # 見出し
+    text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)    # 太字/斜体
+    text = re.sub(r'`[^`]*`', '', text)                      # コード
+    text = re.sub(r'━+|─+', '。', text)                      # 区切り線
+    text = re.sub(r'[\|\[\]【】『』「」《》]', '', text)       # 括弧類
+    text = re.sub(r'^[-*•▌]\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{2,}', '。', text)
+    text = re.sub(r'\n', '、', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def play_tts(text: str) -> None:
+    """OpenAI TTS (nova) でテキストを音声再生する。APIキー未設定時は無音でスキップ。"""
+    api_key = st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return
+    try:
+        from openai import OpenAI as OAI
+        clean = clean_for_tts(text)[:300]
+        if not clean.strip():
+            return
+        resp = OAI(api_key=api_key).audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            input=clean,
+            response_format="mp3",
+        )
+        audio_b64 = base64.b64encode(resp.content).decode()
+        st.markdown(
+            f'<audio autoplay style="display:none">'
+            f'<source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">'
+            f'</audio>',
+            unsafe_allow_html=True,
+        )
+    except Exception:
+        pass  # TTS失敗はサイレントスキップ（メイン機能に影響させない）
+
+
 def go_home():
     st.session_state.mode = None
     st.session_state.messages = []
@@ -400,6 +443,11 @@ def render_sidebar(avatar_url):
             st.session_state.messages = []
             st.session_state.need_response = False
             st.rerun()
+
+        st.divider()
+        voice_on = st.toggle("🔊 音声読み上げ", key="voice_enabled", value=False)
+        if voice_on:
+            st.caption("OpenAI TTS (nova) で読み上げます")
 
 FEATURE_SYSTEMS = {
     "x-research": X_RESEARCH_SYSTEM_EXTRA,
@@ -519,6 +567,8 @@ def render_chat(client, avatar_url):
         st.session_state.need_response = False
         response = _get_response(messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
+        if st.session_state.get("voice_enabled"):
+            play_tts(response)
 
     if user_input := st.chat_input("メッセージを入力してください"):
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -526,6 +576,8 @@ def render_chat(client, avatar_url):
             st.markdown(user_input)
         response = _get_response(st.session_state.messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
+        if st.session_state.get("voice_enabled"):
+            play_tts(response)
 
 def main():
     if "mode" not in st.session_state:
