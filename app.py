@@ -562,24 +562,7 @@ def render_chat(client, avatar_url):
     feature = next((f for f in FEATURES if f["key"] == mode_key), None)
     label = feature["label"] if feature else ""
 
-    header_col, voice_col = st.columns([6, 1])
-    with header_col:
-        st.markdown(f'<div class="mode-header">{label}</div>', unsafe_allow_html=True)
-    with voice_col:
-        is_on = st.session_state.get("voice_enabled", False)
-
-        def _toggle_voice():
-            st.session_state.voice_enabled = not st.session_state.get("voice_enabled", False)
-
-        css_class = "voice-btn-on" if is_on else "voice-btn-off"
-        btn_label = "🔊 ON" if is_on else "🔇 OFF"
-        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-        st.button(btn_label, on_click=_toggle_voice, key="voice_toggle", use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        if is_on:
-            has_key = bool(st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY"))
-            if not has_key:
-                st.caption("⚠️ APIキー未設定")
+    st.markdown(f'<div class="mode-header">{label}</div>', unsafe_allow_html=True)
 
     messages = st.session_state.messages
 
