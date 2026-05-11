@@ -1,4 +1,3 @@
-import re
 import streamlit as st
 import anthropic
 import os
@@ -65,20 +64,6 @@ div.stButton > button {
     min-height: 72px;
     white-space: pre-wrap;
     line-height: 1.5;
-}
-.voice-btn-on > div > button {
-    background: #D4956A !important;
-    color: white !important;
-    border: none !important;
-    min-height: 36px !important;
-    font-size: 0.85rem !important;
-}
-.voice-btn-off > div > button {
-    background: #eee !important;
-    color: #888 !important;
-    border: 1px solid #ccc !important;
-    min-height: 36px !important;
-    font-size: 0.85rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -366,45 +351,6 @@ def get_avatar_url():
         return f"data:image/png;base64,{b64}"
     return None
 
-def clean_for_tts(text: str) -> str:
-    """マークダウン記法を除去して読み上げ用テキストに変換する。"""
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)   # リンク → テキストのみ
-    text = re.sub(r'#{1,6}\s+', '', text)                    # 見出し
-    text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)    # 太字/斜体
-    text = re.sub(r'`[^`]*`', '', text)                      # コード
-    text = re.sub(r'━+|─+', '。', text)                      # 区切り線
-    text = re.sub(r'[\|\[\]【】『』「」《》]', '', text)       # 括弧類
-    text = re.sub(r'^[-*•▌]\s*', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\n{2,}', '。', text)
-    text = re.sub(r'\n', '、', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-
-def play_tts(text: str) -> None:
-    """OpenAI TTS (nova) でテキストを音声再生する。"""
-    api_key = st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        st.warning("⚠️ OPENAI_API_KEY が未設定です。Streamlit の Secrets に追加してください。")
-        return
-    try:
-        from openai import OpenAI as OAI
-        clean = clean_for_tts(text)[:300]
-        if not clean.strip():
-            return
-        with st.spinner("🔊 音声を生成中..."):
-            resp = OAI(api_key=api_key).audio.speech.create(
-                model="tts-1",
-                voice="nova",
-                input=clean,
-                response_format="mp3",
-            )
-        st.markdown("🔊 **みりんちゃんの音声** ▶ を押して再生")
-        st.audio(resp.content, format="audio/mp3", autoplay=True)
-    except Exception as e:
-        st.warning(f"⚠️ 音声生成エラー: {type(e).__name__}: {str(e)[:120]}")
-
-
 def go_home():
     st.session_state.mode = None
     st.session_state.messages = []
@@ -526,26 +472,12 @@ def render_home(avatar_url):
         st.markdown("## みりんちゃん")
         st.caption("CliniCalm — クリニック院長専用 AI 秘書")
 
-    is_on = st.session_state.get("voice_enabled", False)
-    header_col, voice_col = st.columns([5, 1])
-    with header_col:
-        st.markdown("""
-        <div class="home-header">
-            <div style="font-size:1.1rem;font-weight:bold">こんにちは、院長先生！✨</div>
-            <div style="margin-top:6px;opacity:0.9">今日もお疲れ様です。何をお手伝いしましょうか？<br>下のボタンから機能を選んでください。</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with voice_col:
-        def _toggle_voice_home():
-            st.session_state.voice_enabled = not st.session_state.get("voice_enabled", False)
-        css_class = "voice-btn-on" if is_on else "voice-btn-off"
-        btn_label = "🔊 ON" if is_on else "🔇 OFF"
-        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-        st.button(btn_label, on_click=_toggle_voice_home, key="voice_toggle_home", use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        if is_on:
-            has_key = bool(st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY"))
-            st.caption("🔊 ボイスON" if has_key else "⚠️ APIキー未設定")
+    st.markdown("""
+    <div class="home-header">
+        <div style="font-size:1.1rem;font-weight:bold">こんにちは、院長先生！✨</div>
+        <div style="margin-top:6px;opacity:0.9">今日もお疲れ様です。何をお手伝いしましょうか？<br>下のボタンから機能を選んでください。</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
@@ -588,8 +520,6 @@ def render_chat(client, avatar_url):
         st.session_state.need_response = False
         response = _get_response(messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
-        if st.session_state.get("voice_enabled"):
-            play_tts(response)
 
     if user_input := st.chat_input("メッセージを入力してください"):
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -597,8 +527,6 @@ def render_chat(client, avatar_url):
             st.markdown(user_input)
         response = _get_response(st.session_state.messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
-        if st.session_state.get("voice_enabled"):
-            play_tts(response)
 
 def main():
     if "mode" not in st.session_state:
