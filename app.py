@@ -61,6 +61,9 @@ st.markdown("""
 div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
+    min-height: 72px;
+    white-space: pre-wrap;
+    line-height: 1.5;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -475,9 +478,9 @@ def render_home(avatar_url):
     </div>
     """, unsafe_allow_html=True)
 
-    cols = st.columns(3)
+    cols = st.columns(4)
     for i, f in enumerate(FEATURES):
-        with cols[i % 3]:
+        with cols[i % 4]:
             if st.button(
                 f"{f['label']}\n\n{f['desc']}",
                 use_container_width=True,
