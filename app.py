@@ -524,12 +524,26 @@ def render_home(avatar_url):
         st.markdown("## みりんちゃん")
         st.caption("CliniCalm — クリニック院長専用 AI 秘書")
 
-    st.markdown("""
-    <div class="home-header">
-        <div style="font-size:1.1rem;font-weight:bold">こんにちは、院長先生！✨</div>
-        <div style="margin-top:6px;opacity:0.9">今日もお疲れ様です。何をお手伝いしましょうか？<br>下のボタンから機能を選んでください。</div>
-    </div>
-    """, unsafe_allow_html=True)
+    is_on = st.session_state.get("voice_enabled", False)
+    header_col, voice_col = st.columns([5, 1])
+    with header_col:
+        st.markdown("""
+        <div class="home-header">
+            <div style="font-size:1.1rem;font-weight:bold">こんにちは、院長先生！✨</div>
+            <div style="margin-top:6px;opacity:0.9">今日もお疲れ様です。何をお手伝いしましょうか？<br>下のボタンから機能を選んでください。</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with voice_col:
+        def _toggle_voice_home():
+            st.session_state.voice_enabled = not st.session_state.get("voice_enabled", False)
+        css_class = "voice-btn-on" if is_on else "voice-btn-off"
+        btn_label = "🔊 ON" if is_on else "🔇 OFF"
+        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
+        st.button(btn_label, on_click=_toggle_voice_home, key="voice_toggle_home", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        if is_on:
+            has_key = bool(st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY"))
+            st.caption("🔊 ボイスON" if has_key else "⚠️ APIキー未設定")
 
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
