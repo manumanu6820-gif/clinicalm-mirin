@@ -125,6 +125,24 @@ FEATURES = [
 ]
 
 X_RESEARCH_SYSTEM_EXTRA = """
+## Web検索の使い方（X競合リサーチ専用ルール）
+
+リサーチフェーズでは必ず web_search ツールを使い、実在するXアカウントや投稿を探すこと。
+
+**検索クエリ例（診療科・地域に合わせて変える）:**
+- `"{診療科} 医師 Twitter フォロワー 人気"`
+- `"クリニック {診療科} X site:x.com"`
+- `"医師 {地域} Twitter 開業医 集患"`
+- `"{診療科} 先生 X アカウント おすすめ"`
+
+**URLの記載ルール:**
+- 見つかったアカウント・投稿のURLは必ず Markdown リンク形式で記載する
+  例: [アカウント名](https://x.com/username)
+- 検索で実際に確認できた URL だけをリンクにする
+- URLが見つからなかった場合は「URLを確認できませんでした」と明記し、リンクを創作しない
+
+---
+
 ## X競合リサーチAgentモード
 
 あなたは今、クリニック院長向けの「X競合リサーチAgent」として動作します。
@@ -408,6 +426,39 @@ def stream_response(client, messages, feature_key, avatar_url):
         placeholder.markdown(full_text)
     return full_text
 
+USE_SEARCH_MODES = {"x-research"}
+
+
+def stream_response_with_search(client, messages, feature_key, avatar_url):
+    """Anthropic web_search beta を使った応答（x-research 専用）。
+    beta が使えない環境では通常の stream_response にフォールバックする。"""
+    extra = FEATURE_SYSTEMS.get(feature_key, "")
+    system = MIRIN_SYSTEM_BASE + (f"\n{extra}" if extra else "")
+    api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
+
+    full_text = ""
+    with st.chat_message("assistant", avatar=avatar_url or "👩‍💼"):
+        placeholder = st.empty()
+        placeholder.markdown("🔍 *X投稿・競合アカウントを検索中...*")
+        try:
+            with client.beta.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=system,
+                messages=api_messages,
+                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+                betas=["web-search-2025-03-05"],
+            ) as stream:
+                for text in stream.text_stream:
+                    full_text += text
+                    placeholder.markdown(full_text + "▌")
+            placeholder.markdown(full_text)
+        except Exception:
+            placeholder.empty()
+            full_text = stream_response(client, messages, feature_key, avatar_url)
+    return full_text
+
+
 def render_home(avatar_url):
     col_img, col_text = st.columns([1, 6])
     with col_img:
@@ -456,16 +507,21 @@ def render_chat(client, avatar_url):
             with st.chat_message("user", avatar="👨‍⚕️"):
                 st.markdown(msg["content"])
 
+    def _get_response(msgs):
+        if mode_key in USE_SEARCH_MODES:
+            return stream_response_with_search(client, msgs, mode_key, avatar_url)
+        return stream_response(client, msgs, mode_key, avatar_url)
+
     if st.session_state.get("need_response"):
         st.session_state.need_response = False
-        response = stream_response(client, messages, mode_key, avatar_url)
+        response = _get_response(messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
     if user_input := st.chat_input("メッセージを入力してください"):
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user", avatar="👨‍⚕️"):
             st.markdown(user_input)
-        response = stream_response(client, st.session_state.messages, mode_key, avatar_url)
+        response = _get_response(st.session_state.messages)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
 def main():
