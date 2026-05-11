@@ -385,22 +385,24 @@ def play_tts(text: str) -> None:
     """OpenAI TTS (nova) でテキストを音声再生する。"""
     api_key = st.secrets.get("OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        st.warning("🔇 OPENAI_API_KEY が未設定です。Streamlit の Secrets に追加してください。", icon="⚠️")
+        st.warning("⚠️ OPENAI_API_KEY が未設定です。Streamlit の Secrets に追加してください。")
         return
     try:
         from openai import OpenAI as OAI
         clean = clean_for_tts(text)[:300]
         if not clean.strip():
             return
-        resp = OAI(api_key=api_key).audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            input=clean,
-            response_format="mp3",
-        )
+        with st.spinner("🔊 音声を生成中..."):
+            resp = OAI(api_key=api_key).audio.speech.create(
+                model="tts-1",
+                voice="nova",
+                input=clean,
+                response_format="mp3",
+            )
+        st.markdown("🔊 **みりんちゃんの音声** ▶ を押して再生")
         st.audio(resp.content, format="audio/mp3", autoplay=True)
     except Exception as e:
-        st.warning(f"🔇 音声読み上げに失敗しました: {type(e).__name__}", icon="⚠️")
+        st.warning(f"⚠️ 音声生成エラー: {type(e).__name__}: {str(e)[:120]}")
 
 
 def go_home():
