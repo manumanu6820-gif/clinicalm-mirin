@@ -33,15 +33,32 @@ div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
-/* カードオーバーレイ用の透明ボタン（JSが動くまで非表示） */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"]) {
-    height: 0;
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
+/* カード列を positioning context に */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] {
+    position: relative;
 }
-/* ホバー時：カードに枠線ハイライト */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"]:has(button[data-testid="baseButton-secondary"]:hover) .nfc-card {
+/* ボタンラッパーをカード全体に absolute 配置 */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    right: 0 !important; bottom: 0 !important;
+    z-index: 5 !important;
+    margin: 0 !important; padding: 0 !important;
+}
+/* ボタン本体を透明にしてカード全体をクリック可能に */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] button {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    width: 100% !important; height: 100% !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+}
+/* ホバー時のカード枠線ハイライト */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"]:has(button:hover) .nfc-card {
     border-color: #D4956A !important;
     box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
 }
@@ -539,41 +556,7 @@ def render_home(avatar_url):
     with sh_r:
         st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
 
-    # JS: stButton を stVerticalBlock に absolute 配置してカード全体をクリック可能に
-    st.markdown("""
-    <script>
-    (function(){
-        function sp(el,prop,val){el.style.setProperty(prop,val,'important');}
-        function fix(){
-            document.querySelectorAll('.nfc-card').forEach(function(card){
-                if(card._done)return;
-                var mc=card.closest('[data-testid="stMarkdownContainer"]');
-                if(!mc)return;
-                var vb=mc.parentElement;
-                if(!vb)return;
-                var bd=null;
-                for(var i=0;i<vb.children.length;i++){
-                    if(vb.children[i].querySelector('button[data-testid="baseButton-secondary"]')){bd=vb.children[i];break;}
-                }
-                if(!bd)return;
-                var btn=bd.querySelector('button');
-                if(!btn)return;
-                card._done=true;
-                sp(vb,'position','relative');
-                sp(bd,'position','absolute');sp(bd,'top','0');sp(bd,'left','0');
-                sp(bd,'width','100%');sp(bd,'height','100%');sp(bd,'z-index','5');sp(bd,'overflow','visible');
-                sp(btn,'width','100%');sp(btn,'height','100%');sp(btn,'opacity','0');
-                sp(btn,'cursor','pointer');sp(btn,'background','transparent');
-                sp(btn,'border','none');sp(btn,'padding','0');sp(btn,'min-height','0');
-            });
-        }
-        new MutationObserver(fix).observe(document.documentElement,{childList:true,subtree:true});
-        setTimeout(fix,50);setTimeout(fix,300);setTimeout(fix,800);
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
-    # ── 機能カードグリッド（HTMLカード固定高さ＋透明ボタンオーバーレイ） ──
+    # ── 機能カードグリッド（HTMLカード固定高さ＋CSSオーバーレイボタン） ──
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
         key = f["key"]
@@ -603,10 +586,10 @@ def render_home(avatar_url):
                 start_feature(f)
                 st.rerun()
 
-    # ── 提案バー ──────────────────────────────────────────────
+    # ── 提案バー（列を使わずボタンがオーバーレイCSSの影響を受けないようにする） ──
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="background:#FDF6EC;border:1.5px solid #E8D5B7;border-radius:16px;padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
+    <div style="background:#FDF6EC;border:1.5px solid #E8D5B7;border-radius:16px 16px 0 0;padding:14px 20px 10px;display:flex;align-items:center;gap:12px">
         <span style="font-size:1.3rem">💡</span>
         <div>
             <div style="font-weight:bold;font-size:0.88rem;color:#3D2B1F">何をしたらいいか迷ったら…</div>
@@ -614,11 +597,8 @@ def render_home(avatar_url):
         </div>
     </div>
     """, unsafe_allow_html=True)
-    sug_l, sug_r = st.columns([5, 1])
-    with sug_l:
-        suggestion = st.text_input("_sug", placeholder="例）紹介状を書きたい、クレームに返信したい など", label_visibility="collapsed")
-    with sug_r:
-        suggest_clicked = st.button("✨ 提案してもらう", use_container_width=True, key="btn_suggest", type="primary")
+    suggestion = st.text_input("_sug", placeholder="例）紹介状を書きたい、クレームに返信したい など", label_visibility="collapsed")
+    suggest_clicked = st.button("✨ 提案してもらう", use_container_width=True, key="btn_suggest", type="primary")
     if suggest_clicked and suggestion:
         st.session_state.mode = "suggest"
         st.session_state.messages = [{"role": "user", "content": f"「{suggestion}」というご要望に最適な機能を提案し、すぐに始めてください。"}]
