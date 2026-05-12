@@ -33,26 +33,17 @@ div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
-/* ホーム画面 機能カードボタン（全体がクリック可能） */
-div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"] {
-    background: white !important;
-    border: 1.5px solid #EDE8E0 !important;
-    border-radius: 14px !important;
-    padding: 14px !important;
-    text-align: left !important;
-    height: auto !important;
-    min-height: 100px !important;
-    white-space: pre-wrap !important;
-    color: #1A1A1A !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
-    line-height: 1.6 !important;
-    font-size: 0.88rem !important;
+/* カードオーバーレイ用の透明ボタン（JSが動くまで非表示） */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stButton"]:has(button[data-testid="baseButton-secondary"]) {
+    height: 0;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
 }
-div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"]:hover {
+/* ホバー時：カードに枠線ハイライト */
+div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"]:has(button[data-testid="baseButton-secondary"]:hover) .nfc-card {
     border-color: #D4956A !important;
     box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
-    background: white !important;
-    color: #1A1A1A !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -548,7 +539,41 @@ def render_home(avatar_url):
     with sh_r:
         st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
 
-    # ── 機能カードグリッド（ボタン全体がカード） ───────────────
+    # JS: stButton を stVerticalBlock に absolute 配置してカード全体をクリック可能に
+    st.markdown("""
+    <script>
+    (function(){
+        function sp(el,prop,val){el.style.setProperty(prop,val,'important');}
+        function fix(){
+            document.querySelectorAll('.nfc-card').forEach(function(card){
+                if(card._done)return;
+                var mc=card.closest('[data-testid="stMarkdownContainer"]');
+                if(!mc)return;
+                var vb=mc.parentElement;
+                if(!vb)return;
+                var bd=null;
+                for(var i=0;i<vb.children.length;i++){
+                    if(vb.children[i].querySelector('button[data-testid="baseButton-secondary"]')){bd=vb.children[i];break;}
+                }
+                if(!bd)return;
+                var btn=bd.querySelector('button');
+                if(!btn)return;
+                card._done=true;
+                sp(vb,'position','relative');
+                sp(bd,'position','absolute');sp(bd,'top','0');sp(bd,'left','0');
+                sp(bd,'width','100%');sp(bd,'height','100%');sp(bd,'z-index','5');sp(bd,'overflow','visible');
+                sp(btn,'width','100%');sp(btn,'height','100%');sp(btn,'opacity','0');
+                sp(btn,'cursor','pointer');sp(btn,'background','transparent');
+                sp(btn,'border','none');sp(btn,'padding','0');sp(btn,'min-height','0');
+            });
+        }
+        new MutationObserver(fix).observe(document.documentElement,{childList:true,subtree:true});
+        setTimeout(fix,50);setTimeout(fix,300);setTimeout(fix,800);
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+
+    # ── 機能カードグリッド（HTMLカード固定高さ＋透明ボタンオーバーレイ） ──
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
         key = f["key"]
@@ -556,12 +581,25 @@ def render_home(avatar_url):
         label = LABEL_TEXT.get(key, "")
         desc = DESC_TEXT.get(key, "")
         with cols[i % 4]:
-            if st.button(
-                f"{icon['emoji']}  {label}\n\n{desc}",
-                key=f"home_{key}",
-                use_container_width=True,
-                help=label,
-            ):
+            st.markdown(f"""
+            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;
+                        border-radius:14px;padding:16px;height:150px;
+                        box-shadow:0 2px 8px rgba(0,0,0,0.04);
+                        display:flex;flex-direction:column;gap:10px;
+                        transition:border-color 0.2s,box-shadow 0.2s;cursor:pointer;
+                        overflow:hidden;">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <div style="background:{icon['bg']};border-radius:10px;padding:10px;
+                                font-size:1.3rem;flex-shrink:0;line-height:1">{icon['emoji']}</div>
+                    <div>
+                        <div style="font-weight:bold;font-size:0.88rem;color:#1A1A1A;
+                                    margin-bottom:4px;line-height:1.3">{label}</div>
+                        <div style="font-size:0.72rem;color:#888;line-height:1.5">{desc}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(" ", key=f"home_{key}", use_container_width=True):
                 start_feature(f)
                 st.rerun()
 
