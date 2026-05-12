@@ -86,13 +86,6 @@ FEATURES = [
         "system_extra": "",
     },
     {
-        "key": "infohub",
-        "label": "📱 情報ハブ",
-        "desc": "LINE・メール・FAXを\n優先度付きで整理",
-        "trigger": "情報を整理してください。内容を貼り付けてもらえますか？",
-        "system_extra": "",
-    },
-    {
         "key": "x-research",
         "label": "🐦 X競合リサーチ",
         "desc": "競合クリニック分析\n投稿テンプレート10選生成",
@@ -539,7 +532,6 @@ def render_home(avatar_url):
         "complaint":  {"emoji": "💬", "bg": "#DBEAFE"},
         "minutes":    {"emoji": "🎤", "bg": "#FEF3C7"},
         "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
-        "infohub":    {"emoji": "📱", "bg": "#F3E8FF"},
         "x-research":         {"emoji": "🐦", "bg": "#FFE4E6"},
         "shuukan-dashboard":  {"emoji": "📈", "bg": "#D1FAE5"},
     }
@@ -550,7 +542,6 @@ def render_home(avatar_url):
         "complaint":  "クレーム返信",
         "minutes":    "議事録作成",
         "fee":        "診療報酬改定",
-        "infohub":    "情報ハブ",
         "x-research":        "X競合リサーチ",
         "shuukan-dashboard": "集患分析ダッシュボード",
     }
@@ -561,7 +552,6 @@ def render_home(avatar_url):
         "complaint":  "Googleレビュー・患者投書の返信案を作成",
         "minutes":    "朝礼・カンファレンスのメモを議事録に変換",
         "fee":        "最新の改定情報をクリニックに照らして試算",
-        "infohub":    "LINE・メール・FAXを優先度付きで整理",
         "x-research":        "競合クリニック分析・投稿テンプレート10選生成",
         "shuukan-dashboard": "スプシの競合分析結果を表示・みりんちゃんと深掘り分析",
     }
