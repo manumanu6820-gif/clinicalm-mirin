@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import anthropic
 import os
 import base64
@@ -609,79 +608,45 @@ def render_home(avatar_url):
     with sh_r:
         st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
 
-    # ── 機能カードグリッド（HTMLカード固定高さ＋CSSオーバーレイボタン） ──
+    # ── 機能カードグリッド ──
+    st.markdown("""
+    <style>
+    [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button {
+        min-height: 130px !important;
+        white-space: pre-line !important;
+        text-align: left !important;
+        background: white !important;
+        border: 1.5px solid #EDE8E0 !important;
+        border-radius: 14px !important;
+        padding: 16px !important;
+        line-height: 1.6 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+        transition: all 0.2s !important;
+        font-size: 0.84rem !important;
+        color: #444 !important;
+    }
+    [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button:hover {
+        border-color: #D4956A !important;
+        box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
+        background: #FFFAF5 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
         key = f["key"]
         icon = ICON_DATA.get(key, {"emoji": "⚙️", "bg": "#F3F4F6"})
         label = LABEL_TEXT.get(key, "")
-        desc = DESC_TEXT.get(key, "")
+        desc  = DESC_TEXT.get(key, "")
         with cols[i % 4]:
-            st.markdown(f"""
-            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;
-                        border-radius:14px;padding:16px;height:150px;
-                        box-shadow:0 2px 8px rgba(0,0,0,0.04);
-                        display:flex;flex-direction:column;gap:10px;
-                        transition:border-color 0.2s,box-shadow 0.2s;cursor:pointer;
-                        overflow:hidden;">
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <div style="background:{icon['bg']};border-radius:10px;padding:10px;
-                                font-size:1.3rem;flex-shrink:0;line-height:1">{icon['emoji']}</div>
-                    <div>
-                        <div style="font-weight:bold;font-size:0.88rem;color:#1A1A1A;
-                                    margin-bottom:4px;line-height:1.3">{label}</div>
-                        <div style="font-size:0.72rem;color:#888;line-height:1.5">{desc}</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button(" ", key=f"home_{key}", use_container_width=True):
+            if st.button(
+                f"{icon['emoji']}  {label}\n{desc}",
+                key=f"home_{key}",
+                use_container_width=True,
+            ):
                 start_feature(f)
                 st.rerun()
-
-    # ── カードボタン非表示＋クリック転送（components.html 経由で JS を確実に実行） ──
-    components.html("""
-<script>
-(function() {
-    var doc = window.parent.document;
-    function hideEl(el) {
-        el.style.setProperty('display',    'none',   'important');
-        el.style.setProperty('height',     '0',      'important');
-        el.style.setProperty('min-height', '0',      'important');
-        el.style.setProperty('margin',     '0',      'important');
-        el.style.setProperty('padding',    '0',      'important');
-        el.style.setProperty('overflow',   'hidden', 'important');
-    }
-    function bindCardToBtn(card, btn) {
-        if (!card || !btn || card._nfcBound) return;
-        var vb = btn.closest('[data-testid="stVerticalBlock"]');
-        if (!vb) return;
-        var toHide = btn;
-        while (toHide.parentElement && toHide.parentElement !== vb) {
-            toHide = toHide.parentElement;
-        }
-        if (toHide.parentElement === vb) { hideEl(toHide); }
-        card._nfcBound = true;
-        card.style.cursor = 'pointer';
-        card.addEventListener('click', function() { btn.click(); });
-    }
-    function init() {
-        // 機能カード（baseButton-secondary）
-        doc.querySelectorAll(
-            '[data-testid="stMain"] [data-testid="column"] button[data-testid="baseButton-secondary"]'
-        ).forEach(function(btn) {
-            if (btn._nfcBound) return;
-            btn._nfcBound = true;
-            var vb = btn.closest('[data-testid="stVerticalBlock"]');
-            if (vb) { bindCardToBtn(vb.querySelector('.nfc-card'), btn); }
-        });
-    }
-    setTimeout(init, 300);
-    setTimeout(init, 800);
-    setTimeout(init, 2000);
-})();
-</script>
-""", height=0)
 
     # ── 提案バー（列を使わずボタンがオーバーレイCSSの影響を受けないようにする） ──
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
