@@ -33,29 +33,26 @@ div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
-/* ホーム画面カードに連結するボタン（カード下部） */
+/* ホーム画面 機能カードボタン（全体がクリック可能） */
 div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"] {
-    border-radius: 0 0 14px 14px !important;
-    border: 1.5px solid #EDE8E0 !important;
-    border-top: none !important;
-    min-height: 36px !important;
-    height: 36px !important;
-    color: #D4956A !important;
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
     background: white !important;
-    box-shadow: none !important;
-    margin-top: -2px !important;
-    padding: 0 12px !important;
+    border: 1.5px solid #EDE8E0 !important;
+    border-radius: 14px !important;
+    padding: 14px !important;
+    text-align: left !important;
+    height: auto !important;
+    min-height: 100px !important;
+    white-space: pre-wrap !important;
+    color: #1A1A1A !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+    line-height: 1.6 !important;
+    font-size: 0.88rem !important;
 }
 div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"]:hover {
-    background: #FDF6EC !important;
-    border-color: #D4956A !important;
-}
-.nfc-card { transition: border-color 0.2s, box-shadow 0.2s; }
-.nfc-card:hover {
     border-color: #D4956A !important;
     box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
+    background: white !important;
+    color: #1A1A1A !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -511,7 +508,7 @@ def render_home(avatar_url):
     with col_hr:
         dashboard_f = next(f for f in FEATURES if f["key"] == "dashboard")
         st.markdown("""
-        <div style="background:white;border:1.5px solid #E8D5B7;border-radius:14px 14px 0 0;border-bottom:none;padding:14px 16px 12px;margin-top:4px">
+        <div style="background:white;border:1.5px solid #E8D5B7;border-radius:14px;padding:14px 16px;margin-top:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
             <div style="font-size:0.72rem;font-weight:bold;color:#D97706;margin-bottom:8px;display:flex;align-items:center;gap:5px">
                 ✨ 今日のおすすめ
             </div>
@@ -520,10 +517,11 @@ def render_home(avatar_url):
                 <div style="font-size:0.82rem;color:#3D2B1F;line-height:1.5;flex:1">
                     経営ダッシュボードで<br>昨日の来院数をチェックしてみましょう
                 </div>
+                <div style="color:#D4956A;font-size:1.1rem">›</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("経営ダッシュボードを開く ›", key="rec_dashboard", use_container_width=True):
+        if st.button("　", key="rec_dashboard", use_container_width=True, help="経営ダッシュボードを開く", type="primary"):
             start_feature(dashboard_f)
             st.rerun()
 
@@ -550,7 +548,7 @@ def render_home(avatar_url):
     with sh_r:
         st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
 
-    # ── 機能カードグリッド（カード上部HTML＋ボタン下部を連結） ──
+    # ── 機能カードグリッド（ボタン全体がカード） ───────────────
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
         key = f["key"]
@@ -558,18 +556,12 @@ def render_home(avatar_url):
         label = LABEL_TEXT.get(key, "")
         desc = DESC_TEXT.get(key, "")
         with cols[i % 4]:
-            st.markdown(f"""
-            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;border-radius:14px 14px 0 0;border-bottom:none;padding:16px 16px 12px;">
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <div style="background:{icon['bg']};border-radius:10px;padding:10px;font-size:1.35rem;flex-shrink:0;line-height:1">{icon['emoji']}</div>
-                    <div>
-                        <div style="font-weight:bold;font-size:0.88rem;color:#1A1A1A;margin-bottom:4px">{label}</div>
-                        <div style="font-size:0.73rem;color:#888;line-height:1.5">{desc}</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("さっそく使う ›", key=f"home_{key}", use_container_width=True):
+            if st.button(
+                f"{icon['emoji']}  {label}\n\n{desc}",
+                key=f"home_{key}",
+                use_container_width=True,
+                help=label,
+            ):
                 start_feature(f)
                 st.rerun()
 
