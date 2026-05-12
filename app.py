@@ -1,5 +1,6 @@
 import streamlit as st
 import anthropic
+from urllib.parse import quote
 import os
 import base64
 import pandas as pd
@@ -311,7 +312,7 @@ Q6. 現在飲んでいるお薬はありますか？
 """
 
 def load_sheet_data(sheets_id: str, sheet_name: str) -> pd.DataFrame:
-    url = f"https://docs.google.com/spreadsheets/d/{sheets_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    url = f"https://docs.google.com/spreadsheets/d/{sheets_id}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
     return pd.read_csv(url)
 
 
