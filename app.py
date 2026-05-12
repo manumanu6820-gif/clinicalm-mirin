@@ -19,35 +19,6 @@ st.markdown("""
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #FDF6EC 0%, #FAF0E6 100%);
 }
-.feature-card {
-    background: white;
-    border: 1.5px solid #E8D5B7;
-    border-radius: 16px;
-    padding: 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    height: 140px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-.feature-card:hover {
-    border-color: #D4956A;
-    box-shadow: 0 4px 16px rgba(212,149,106,0.2);
-}
-.feature-icon { font-size: 2rem; }
-.feature-title { font-size: 0.95rem; font-weight: bold; color: #3D2B1F; }
-.feature-desc { font-size: 0.75rem; color: #888; line-height: 1.4; }
-.home-header {
-    background: linear-gradient(135deg, #D4956A 0%, #E8B48A 100%);
-    border-radius: 16px;
-    padding: 24px 32px;
-    color: white;
-    margin-bottom: 24px;
-}
 .mode-header {
     background: #FDF6EC;
     border-left: 4px solid #D4956A;
@@ -61,9 +32,10 @@ st.markdown("""
 div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
-    min-height: 72px;
-    white-space: pre-wrap;
-    line-height: 1.5;
+}
+.nfc-card:hover {
+    border-color: #D4956A !important;
+    box-shadow: 0 6px 20px rgba(212,149,106,0.25) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -464,37 +436,182 @@ def stream_response_with_search(client, messages, feature_key, avatar_url):
 
 
 def render_home(avatar_url):
-    col_img, col_text = st.columns([1, 6])
-    with col_img:
-        if avatar_url:
-            st.image(avatar_url, width=80)
-    with col_text:
-        st.markdown("## みりんちゃん")
-        st.caption("CliniCalm — クリニック院長専用 AI 秘書")
+    ICON_DATA = {
+        "interview":  {"emoji": "🩺", "bg": "#EDE9FF"},
+        "document":   {"emoji": "📄", "bg": "#FFE4E6"},
+        "dashboard":  {"emoji": "📊", "bg": "#D1FAE5"},
+        "complaint":  {"emoji": "💬", "bg": "#DBEAFE"},
+        "minutes":    {"emoji": "🎤", "bg": "#FEF3C7"},
+        "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
+        "infohub":    {"emoji": "📱", "bg": "#F3E8FF"},
+        "x-research": {"emoji": "🐦", "bg": "#FFE4E6"},
+    }
+    LABEL_TEXT = {
+        "interview":  "問診サポート",
+        "document":   "書類下書き",
+        "dashboard":  "経営ダッシュボード",
+        "complaint":  "クレーム返信",
+        "minutes":    "議事録作成",
+        "fee":        "診療報酬改定",
+        "infohub":    "情報ハブ",
+        "x-research": "X競合リサーチ",
+    }
+    DESC_TEXT = {
+        "interview":  "症状を会話形式で収集し、院長向けサマリー生成",
+        "document":   "紹介状・診断書・主治医意見書をすばやく作成",
+        "dashboard":  "来院数・レセプト・算定漏れアラートで経営を見える化",
+        "complaint":  "Googleレビュー・患者投書の返信案を作成",
+        "minutes":    "朝礼・カンファレンスのメモを議事録に変換",
+        "fee":        "最新の改定情報をクリニックに照らして試算",
+        "infohub":    "LINE・メール・FAXを優先度付きで整理",
+        "x-research": "競合クリニック分析・投稿テンプレート10選生成",
+    }
 
+    # JS: カードの上に透明ボタンをオーバーレイしてクリック可能にする
     st.markdown("""
-    <div class="home-header">
-        <div style="font-size:1.1rem;font-weight:bold">こんにちは、院長先生！✨</div>
-        <div style="margin-top:6px;opacity:0.9">今日もお疲れ様です。何をお手伝いしましょうか？<br>下のボタンから機能を選んでください。</div>
+    <script>
+    (function(){
+        function overlay(){
+            document.querySelectorAll('.nfc-card,.nfc-rec-card').forEach(function(card){
+                if(card.dataset.done) return;
+                var mc=card.closest('[data-testid="stMarkdownContainer"]');
+                if(!mc) return;
+                var sib=mc.nextElementSibling;
+                while(sib && !sib.querySelector('button')) sib=sib.nextElementSibling;
+                if(!sib) return;
+                var btn=sib.querySelector('button');
+                if(!btn) return;
+                card.dataset.done='1';
+                var h=card.offsetHeight+8;
+                btn.style.cssText='margin-top:-'+h+'px!important;height:'+h+'px!important;opacity:0!important;cursor:pointer!important;position:relative!important;z-index:10!important;width:100%!important;display:block!important;';
+                card.style.pointerEvents='none';
+            });
+        }
+        new MutationObserver(overlay).observe(document.documentElement,{childList:true,subtree:true});
+        overlay();
+    })();
+    </script>
+    """, unsafe_allow_html=True)
+
+    # ── ヘッダー ──────────────────────────────────────────────
+    if avatar_url:
+        avatar_html = f'<img src="{avatar_url}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #F5C78E">'
+    else:
+        avatar_html = '<div style="width:72px;height:72px;border-radius:50%;background:#D4956A;display:flex;align-items:center;justify-content:center;font-size:32px">👩‍💼</div>'
+
+    col_hl, col_hr = st.columns([3, 2])
+    with col_hl:
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:16px;padding:4px 0 16px">
+            {avatar_html}
+            <div>
+                <div style="font-size:1.6rem;font-weight:bold;color:#3D2B1F;line-height:1.2">みりんちゃん</div>
+                <div style="font-size:0.82rem;color:#999;margin-top:3px">CliniCalm — クリニック院長専用 AI 秘書</div>
+                <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:#FDF6EC;border:1px solid #E8D5B7;border-radius:20px;padding:4px 12px;font-size:0.72rem;color:#D4956A;font-weight:500">
+                    🛡️ 院長の味方として、今日もサポートします！
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_hr:
+        dashboard_f = next(f for f in FEATURES if f["key"] == "dashboard")
+        st.markdown("""
+        <div class="nfc-rec-card" style="background:white;border:1.5px solid #E8D5B7;border-radius:16px;padding:14px 16px;margin-top:4px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;transition:box-shadow 0.2s">
+            <div style="font-size:0.72rem;font-weight:bold;color:#D97706;margin-bottom:8px;display:flex;align-items:center;gap:5px">
+                ✨ 今日のおすすめ
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+                <div style="background:#D1FAE5;border-radius:8px;padding:8px;font-size:1.3rem;flex-shrink:0">📊</div>
+                <div style="font-size:0.82rem;color:#3D2B1F;line-height:1.5;flex:1">
+                    経営ダッシュボードで<br>昨日の来院数をチェックしてみましょう
+                </div>
+                <div style="color:#D4956A;font-size:1.3rem">›</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button(" ", key="rec_dashboard", use_container_width=True, help="経営ダッシュボードを開く"):
+            start_feature(dashboard_f)
+            st.rerun()
+
+    # ── ヒーローバナー ────────────────────────────────────────
+    if avatar_url:
+        chara = f'<img src="{avatar_url}" style="position:absolute;right:16px;bottom:0;height:140px;object-fit:contain">'
+    else:
+        chara = '<div style="position:absolute;right:20px;bottom:0;font-size:80px">👩‍💼</div>'
+
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#F8D5A5 0%,#FCECD8 55%,#FDF9F5 100%);border-radius:20px;padding:28px 230px 28px 32px;position:relative;overflow:hidden;margin-bottom:20px;min-height:90px">
+        <div style="font-size:1.3rem;font-weight:bold;color:#5D3A1A;margin-bottom:8px">👋 こんにちは、院長先生！✨</div>
+        <div style="font-size:0.88rem;color:#7C5C3E;line-height:1.8">
+            今日はどのようなお手伝いをしましょうか？<br>下のメニューから、やりたいことを選んでください。
+        </div>
+        {chara}
     </div>
     """, unsafe_allow_html=True)
 
+    # ── 機能セクションヘッダー ────────────────────────────────
+    sh_l, sh_r = st.columns([1, 1])
+    with sh_l:
+        st.markdown('<p style="font-weight:bold;color:#3D2B1F;margin:0 0 8px">よく使う機能</p>', unsafe_allow_html=True)
+    with sh_r:
+        st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
+
+    # ── 機能カードグリッド ────────────────────────────────────
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
+        key = f["key"]
+        icon = ICON_DATA.get(key, {"emoji": "⚙️", "bg": "#F3F4F6"})
+        label = LABEL_TEXT.get(key, "")
+        desc = DESC_TEXT.get(key, "")
         with cols[i % 4]:
-            if st.button(
-                f"{f['label']}\n\n{f['desc']}",
-                use_container_width=True,
-                key=f"home_{f['key']}",
-                help=f['desc'],
-            ):
+            st.markdown(f"""
+            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;border-radius:16px;padding:16px;margin-bottom:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:border-color 0.2s,box-shadow 0.2s;cursor:pointer">
+                <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px">
+                    <div style="background:{icon['bg']};border-radius:10px;padding:10px;font-size:1.35rem;flex-shrink:0;line-height:1">{icon['emoji']}</div>
+                    <div>
+                        <div style="font-weight:bold;font-size:0.88rem;color:#1A1A1A;margin-bottom:4px">{label}</div>
+                        <div style="font-size:0.73rem;color:#888;line-height:1.5">{desc}</div>
+                    </div>
+                </div>
+                <div style="font-size:0.76rem;color:#D4956A;font-weight:600;border-top:1px solid #F5EFE8;padding-top:8px">さっそく使う ›</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(" ", key=f"home_{key}", use_container_width=True, help=label):
                 start_feature(f)
                 st.rerun()
+
+    # ── 提案バー ──────────────────────────────────────────────
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="background:#FDF6EC;border:1.5px solid #E8D5B7;border-radius:16px 16px 0 0;padding:14px 20px 10px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:1.3rem">💡</span>
+        <div>
+            <div style="font-weight:bold;font-size:0.88rem;color:#3D2B1F">何をしたらいいか迷ったら…</div>
+            <div style="font-size:0.73rem;color:#999;margin-top:2px">目的を入力するだけで、みりんちゃんが最適な機能をご提案します！</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    sug_l, sug_r = st.columns([4, 1])
+    with sug_l:
+        suggestion = st.text_input("_sug", placeholder="例）紹介状を書きたい、クレームに返信したい など", label_visibility="collapsed")
+    with sug_r:
+        suggest_clicked = st.button("✨ 提案してもらう", use_container_width=True, key="btn_suggest", type="primary")
+    if suggest_clicked and suggestion:
+        st.session_state.mode = "suggest"
+        st.session_state.messages = [{"role": "user", "content": f"「{suggestion}」というご要望に最適な機能を提案し、すぐに始めてください。"}]
+        st.session_state.need_response = True
+        st.rerun()
 
 def render_chat(client, avatar_url):
     mode_key = st.session_state.mode
     feature = next((f for f in FEATURES if f["key"] == mode_key), None)
-    label = feature["label"] if feature else ""
+    if feature:
+        label = feature["label"]
+    elif mode_key == "suggest":
+        label = "✨ おすすめ機能の提案"
+    else:
+        label = ""
 
     st.markdown(f'<div class="mode-header">{label}</div>', unsafe_allow_html=True)
 
