@@ -609,11 +609,16 @@ def render_home(avatar_url):
         border: 1.5px solid #EDE8E0 !important;
         border-radius: 14px !important;
         padding: 16px !important;
-        line-height: 1.6 !important;
+        line-height: 1.8 !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
         transition: all 0.2s !important;
-        font-size: 0.84rem !important;
-        color: #444 !important;
+        font-size: 0.82rem !important;
+        color: #666 !important;
+    }
+    [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button::first-line {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: #1A1A1A !important;
     }
     [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button:hover {
         border-color: #D4956A !important;
