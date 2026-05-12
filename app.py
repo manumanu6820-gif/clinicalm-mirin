@@ -87,13 +87,6 @@ FEATURES = [
         "system_extra": "",
     },
     {
-        "key": "x-research",
-        "label": "🐦 X競合リサーチ",
-        "desc": "競合クリニック分析\n投稿テンプレート10選生成",
-        "trigger": "X競合リサーチを始めてください。",
-        "system_extra": "",
-    },
-    {
         "key": "shuukan-dashboard",
         "label": "📈 集患分析ダッシュボード",
         "desc": "競合分析結果・投稿案を\n確認・チャットで深掘り",
@@ -542,7 +535,6 @@ def render_home(avatar_url):
         "complaint":  {"emoji": "💬", "bg": "#DBEAFE"},
         "minutes":    {"emoji": "🎤", "bg": "#FEF3C7"},
         "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
-        "x-research":         {"emoji": "🐦", "bg": "#FFE4E6"},
         "shuukan-dashboard":  {"emoji": "📈", "bg": "#D1FAE5"},
     }
     LABEL_TEXT = {
@@ -552,7 +544,6 @@ def render_home(avatar_url):
         "complaint":  "クレーム返信",
         "minutes":    "議事録作成",
         "fee":        "診療報酬改定",
-        "x-research":        "X競合リサーチ",
         "shuukan-dashboard": "集患分析ダッシュボード",
     }
     DESC_TEXT = {
@@ -562,7 +553,6 @@ def render_home(avatar_url):
         "complaint":  "Googleレビュー・患者投書の返信案を作成",
         "minutes":    "朝礼・カンファレンスのメモを議事録に変換",
         "fee":        "最新の改定情報をクリニックに照らして試算",
-        "x-research":        "競合クリニック分析・投稿テンプレート10選生成",
         "shuukan-dashboard": "スプシの競合分析結果を表示・みりんちゃんと深掘り分析",
     }
 
