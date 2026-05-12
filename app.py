@@ -33,9 +33,29 @@ div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
+/* ホーム画面カードに連結するボタン（カード下部） */
+div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"] {
+    border-radius: 0 0 14px 14px !important;
+    border: 1.5px solid #EDE8E0 !important;
+    border-top: none !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    color: #D4956A !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    background: white !important;
+    box-shadow: none !important;
+    margin-top: -2px !important;
+    padding: 0 12px !important;
+}
+div[data-testid="stMain"] div[data-testid="column"] button[data-testid="baseButton-secondary"]:hover {
+    background: #FDF6EC !important;
+    border-color: #D4956A !important;
+}
+.nfc-card { transition: border-color 0.2s, box-shadow 0.2s; }
 .nfc-card:hover {
     border-color: #D4956A !important;
-    box-shadow: 0 6px 20px rgba(212,149,106,0.25) !important;
+    box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -467,32 +487,6 @@ def render_home(avatar_url):
         "x-research": "競合クリニック分析・投稿テンプレート10選生成",
     }
 
-    # JS: カードの上に透明ボタンをオーバーレイしてクリック可能にする
-    st.markdown("""
-    <script>
-    (function(){
-        function overlay(){
-            document.querySelectorAll('.nfc-card,.nfc-rec-card').forEach(function(card){
-                if(card.dataset.done) return;
-                var mc=card.closest('[data-testid="stMarkdownContainer"]');
-                if(!mc) return;
-                var sib=mc.nextElementSibling;
-                while(sib && !sib.querySelector('button')) sib=sib.nextElementSibling;
-                if(!sib) return;
-                var btn=sib.querySelector('button');
-                if(!btn) return;
-                card.dataset.done='1';
-                var h=card.offsetHeight+8;
-                btn.style.cssText='margin-top:-'+h+'px!important;height:'+h+'px!important;opacity:0!important;cursor:pointer!important;position:relative!important;z-index:10!important;width:100%!important;display:block!important;';
-                card.style.pointerEvents='none';
-            });
-        }
-        new MutationObserver(overlay).observe(document.documentElement,{childList:true,subtree:true});
-        overlay();
-    })();
-    </script>
-    """, unsafe_allow_html=True)
-
     # ── ヘッダー ──────────────────────────────────────────────
     if avatar_url:
         avatar_html = f'<img src="{avatar_url}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #F5C78E">'
@@ -517,7 +511,7 @@ def render_home(avatar_url):
     with col_hr:
         dashboard_f = next(f for f in FEATURES if f["key"] == "dashboard")
         st.markdown("""
-        <div class="nfc-rec-card" style="background:white;border:1.5px solid #E8D5B7;border-radius:16px;padding:14px 16px;margin-top:4px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;transition:box-shadow 0.2s">
+        <div style="background:white;border:1.5px solid #E8D5B7;border-radius:14px 14px 0 0;border-bottom:none;padding:14px 16px 12px;margin-top:4px">
             <div style="font-size:0.72rem;font-weight:bold;color:#D97706;margin-bottom:8px;display:flex;align-items:center;gap:5px">
                 ✨ 今日のおすすめ
             </div>
@@ -526,11 +520,10 @@ def render_home(avatar_url):
                 <div style="font-size:0.82rem;color:#3D2B1F;line-height:1.5;flex:1">
                     経営ダッシュボードで<br>昨日の来院数をチェックしてみましょう
                 </div>
-                <div style="color:#D4956A;font-size:1.3rem">›</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button(" ", key="rec_dashboard", use_container_width=True, help="経営ダッシュボードを開く"):
+        if st.button("経営ダッシュボードを開く ›", key="rec_dashboard", use_container_width=True):
             start_feature(dashboard_f)
             st.rerun()
 
@@ -557,7 +550,7 @@ def render_home(avatar_url):
     with sh_r:
         st.markdown('<p style="text-align:right;font-size:0.82rem;color:#D4956A;margin:0 0 8px">すべての機能を見る ›</p>', unsafe_allow_html=True)
 
-    # ── 機能カードグリッド ────────────────────────────────────
+    # ── 機能カードグリッド（カード上部HTML＋ボタン下部を連結） ──
     cols = st.columns(4)
     for i, f in enumerate(FEATURES):
         key = f["key"]
@@ -566,25 +559,24 @@ def render_home(avatar_url):
         desc = DESC_TEXT.get(key, "")
         with cols[i % 4]:
             st.markdown(f"""
-            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;border-radius:16px;padding:16px;margin-bottom:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:border-color 0.2s,box-shadow 0.2s;cursor:pointer">
-                <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px">
+            <div class="nfc-card" style="background:white;border:1.5px solid #EDE8E0;border-radius:14px 14px 0 0;border-bottom:none;padding:16px 16px 12px;">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
                     <div style="background:{icon['bg']};border-radius:10px;padding:10px;font-size:1.35rem;flex-shrink:0;line-height:1">{icon['emoji']}</div>
                     <div>
                         <div style="font-weight:bold;font-size:0.88rem;color:#1A1A1A;margin-bottom:4px">{label}</div>
                         <div style="font-size:0.73rem;color:#888;line-height:1.5">{desc}</div>
                     </div>
                 </div>
-                <div style="font-size:0.76rem;color:#D4956A;font-weight:600;border-top:1px solid #F5EFE8;padding-top:8px">さっそく使う ›</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(" ", key=f"home_{key}", use_container_width=True, help=label):
+            if st.button("さっそく使う ›", key=f"home_{key}", use_container_width=True):
                 start_feature(f)
                 st.rerun()
 
     # ── 提案バー ──────────────────────────────────────────────
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="background:#FDF6EC;border:1.5px solid #E8D5B7;border-radius:16px 16px 0 0;padding:14px 20px 10px;display:flex;align-items:center;gap:12px">
+    <div style="background:#FDF6EC;border:1.5px solid #E8D5B7;border-radius:16px;padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:8px">
         <span style="font-size:1.3rem">💡</span>
         <div>
             <div style="font-weight:bold;font-size:0.88rem;color:#3D2B1F">何をしたらいいか迷ったら…</div>
@@ -592,7 +584,7 @@ def render_home(avatar_url):
         </div>
     </div>
     """, unsafe_allow_html=True)
-    sug_l, sug_r = st.columns([4, 1])
+    sug_l, sug_r = st.columns([5, 1])
     with sug_l:
         suggestion = st.text_input("_sug", placeholder="例）紹介状を書きたい、クレームに返信したい など", label_visibility="collapsed")
     with sug_r:
