@@ -333,7 +333,16 @@ def render_shuukan_dashboard(client, avatar_url):
         try:
             log_df = load_sheet_data(sheets_id, "投稿分析ログ")
             st.markdown(f"**{len(log_df)} 件の分析データ**")
-            st.dataframe(log_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                log_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "WebサイトURL": st.column_config.LinkColumn(
+                        "WebサイトURL", display_text="🔗 開く"
+                    )
+                },
+            )
         except Exception as e:
             st.error(f"データ取得エラー：{e}\nスプレッドシートの共有設定を「リンクを知っている全員が閲覧可」に変更してください。")
 
