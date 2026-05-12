@@ -465,6 +465,13 @@ def render_sidebar(avatar_url):
             st.session_state.need_response = False
             st.rerun()
 
+        st.divider()
+        st.markdown("**📱 LINEでも使えます**")
+        lineqr_path = Path(__file__).parent / "assets" / "lineqr.png"
+        if lineqr_path.exists():
+            st.image(str(lineqr_path), use_container_width=True)
+        st.caption("QRコードを読み取って友だち追加")
+
 
 FEATURE_SYSTEMS = {
     "x-research": X_RESEARCH_SYSTEM_EXTRA,
