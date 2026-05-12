@@ -616,8 +616,8 @@ def render_home(avatar_url):
         color: #666 !important;
     }
     [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button::first-line {
-        font-size: 1.05rem !important;
-        font-weight: 700 !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
         color: #1A1A1A !important;
     }
     [data-testid="stMain"] [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button:hover {
