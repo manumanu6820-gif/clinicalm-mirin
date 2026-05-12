@@ -1,7 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import anthropic
 import os
 import base64
+import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -33,32 +35,8 @@ div.stButton > button {
     border-radius: 10px;
     font-weight: 500;
 }
-/* カード列を positioning context に */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] {
-    position: relative;
-}
-/* ボタンラッパーをカード全体に absolute 配置 */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] {
-    position: absolute !important;
-    top: 0 !important; left: 0 !important;
-    right: 0 !important; bottom: 0 !important;
-    z-index: 5 !important;
-    margin: 0 !important; padding: 0 !important;
-}
-/* ボタン本体を透明にしてカード全体をクリック可能に */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] button {
-    position: absolute !important;
-    top: 0 !important; left: 0 !important;
-    width: 100% !important; height: 100% !important;
-    opacity: 0 !important;
-    cursor: pointer !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    background: transparent !important;
-}
-/* ホバー時のカード枠線ハイライト */
-div[data-testid="stMain"] div[data-testid="column"] div[data-testid="stVerticalBlock"]:has(button:hover) .nfc-card {
+/* 機能カードのホバーエフェクト */
+.nfc-card:hover {
     border-color: #D4956A !important;
     box-shadow: 0 4px 16px rgba(212,149,106,0.2) !important;
 }
@@ -120,6 +98,13 @@ FEATURES = [
         "label": "🐦 X競合リサーチ",
         "desc": "競合クリニック分析\n投稿テンプレート10選生成",
         "trigger": "X競合リサーチを始めてください。",
+        "system_extra": "",
+    },
+    {
+        "key": "shuukan-dashboard",
+        "label": "📈 集患分析ダッシュボード",
+        "desc": "競合分析結果・投稿案を\n確認・チャットで深掘り",
+        "trigger": "集患分析ダッシュボードを開いてください",
         "system_extra": "",
     },
 ]
@@ -333,6 +318,93 @@ Q6. 現在飲んでいるお薬はありますか？
 ---
 """
 
+def load_sheet_data(sheets_id: str, sheet_name: str) -> pd.DataFrame:
+    url = f"https://docs.google.com/spreadsheets/d/{sheets_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    return pd.read_csv(url)
+
+
+def render_shuukan_dashboard(client, avatar_url):
+    st.markdown('<div class="mode-header">📈 集患分析ダッシュボード</div>', unsafe_allow_html=True)
+
+    sheets_id = st.secrets.get("SHEETS_ID", "") or os.getenv("SHEETS_ID", "")
+    if not sheets_id:
+        st.warning("スプレッドシートIDが設定されていません。Streamlit secretsに `SHEETS_ID` を追加してください。")
+        st.code("SHEETS_ID = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'", language="toml")
+        return
+
+    tab1, tab2, tab3 = st.tabs(["📋 競合分析ログ", "✍️ コンテンツ案", "💬 みりんちゃんに質問"])
+
+    log_df = content_df = None
+
+    with tab1:
+        try:
+            log_df = load_sheet_data(sheets_id, "投稿分析ログ")
+            st.markdown(f"**{len(log_df)} 件の分析データ**")
+            st.dataframe(log_df, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"データ取得エラー：{e}\nスプレッドシートの共有設定を「リンクを知っている全員が閲覧可」に変更してください。")
+
+    with tab2:
+        try:
+            content_df = load_sheet_data(sheets_id, "コンテンツ案")
+            if content_df is not None and not content_df.empty:
+                for _, row in content_df.iterrows():
+                    with st.expander(f"📅 {row.iloc[0]}　重点施策：{row.iloc[5] if len(row) > 5 else ''}"):
+                        st.markdown(f"**競合サマリー**\n{row.iloc[1] if len(row) > 1 else ''}")
+                        st.divider()
+                        for i, label in enumerate(["X投稿案①", "X投稿案②", "X投稿案③"], start=2):
+                            if len(row) > i and row.iloc[i]:
+                                st.info(f"**{label}**\n\n{row.iloc[i]}")
+        except Exception as e:
+            st.error(f"データ取得エラー：{e}")
+
+    with tab3:
+        st.caption("スプシのデータをもとに、みりんちゃんが分析・アドバイスします")
+
+        summary_parts = []
+        if log_df is not None and not log_df.empty:
+            summary_parts.append("【競合分析ログ】\n" + log_df.to_string(index=False))
+        if content_df is not None and not content_df.empty:
+            summary_parts.append("【コンテンツ案】\n" + content_df.to_string(index=False))
+        sheet_context = "\n\n".join(summary_parts) if summary_parts else "（データなし）"
+
+        if "dashboard_messages" not in st.session_state:
+            st.session_state.dashboard_messages = []
+
+        for msg in st.session_state.dashboard_messages:
+            avatar = avatar_url or "👩‍💼" if msg["role"] == "assistant" else "👨‍⚕️"
+            with st.chat_message(msg["role"], avatar=avatar):
+                st.markdown(msg["content"])
+
+        if user_input := st.chat_input("例）今週一番注目すべき競合は？　投稿案を改善して"):
+            st.session_state.dashboard_messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user", avatar="👨‍⚕️"):
+                st.markdown(user_input)
+
+            system = MIRIN_SYSTEM_BASE + f"""
+あなたは今、集患分析ダッシュボードモードです。
+以下のスプレッドシートデータをもとに、院長先生の質問に答えてください。
+
+{sheet_context}
+"""
+            api_messages = [{"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.dashboard_messages]
+            full_text = ""
+            with st.chat_message("assistant", avatar=avatar_url or "👩‍💼"):
+                placeholder = st.empty()
+                with client.messages.stream(
+                    model="claude-sonnet-4-6",
+                    max_tokens=2048,
+                    system=system,
+                    messages=api_messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        full_text += text
+                        placeholder.markdown(full_text + "▌")
+                placeholder.markdown(full_text)
+            st.session_state.dashboard_messages.append({"role": "assistant", "content": full_text})
+
+
 def get_client():
     api_key = st.secrets.get("ANTHROPIC_API_KEY", None) or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -469,7 +541,8 @@ def render_home(avatar_url):
         "minutes":    {"emoji": "🎤", "bg": "#FEF3C7"},
         "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
         "infohub":    {"emoji": "📱", "bg": "#F3E8FF"},
-        "x-research": {"emoji": "🐦", "bg": "#FFE4E6"},
+        "x-research":         {"emoji": "🐦", "bg": "#FFE4E6"},
+        "shuukan-dashboard":  {"emoji": "📈", "bg": "#D1FAE5"},
     }
     LABEL_TEXT = {
         "interview":  "問診サポート",
@@ -479,7 +552,8 @@ def render_home(avatar_url):
         "minutes":    "議事録作成",
         "fee":        "診療報酬改定",
         "infohub":    "情報ハブ",
-        "x-research": "X競合リサーチ",
+        "x-research":        "X競合リサーチ",
+        "shuukan-dashboard": "集患分析ダッシュボード",
     }
     DESC_TEXT = {
         "interview":  "症状を会話形式で収集し、院長向けサマリー生成",
@@ -489,7 +563,8 @@ def render_home(avatar_url):
         "minutes":    "朝礼・カンファレンスのメモを議事録に変換",
         "fee":        "最新の改定情報をクリニックに照らして試算",
         "infohub":    "LINE・メール・FAXを優先度付きで整理",
-        "x-research": "競合クリニック分析・投稿テンプレート10選生成",
+        "x-research":        "競合クリニック分析・投稿テンプレート10選生成",
+        "shuukan-dashboard": "スプシの競合分析結果を表示・みりんちゃんと深掘り分析",
     }
 
     # ── ヘッダー ──────────────────────────────────────────────
@@ -498,40 +573,18 @@ def render_home(avatar_url):
     else:
         avatar_html = '<div style="width:72px;height:72px;border-radius:50%;background:#D4956A;display:flex;align-items:center;justify-content:center;font-size:32px">👩‍💼</div>'
 
-    col_hl, col_hr = st.columns([3, 2])
-    with col_hl:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:16px;padding:4px 0 16px">
-            {avatar_html}
-            <div>
-                <div style="font-size:1.6rem;font-weight:bold;color:#3D2B1F;line-height:1.2">みりんちゃん</div>
-                <div style="font-size:0.82rem;color:#999;margin-top:3px">CliniCalm — クリニック院長専用 AI 秘書</div>
-                <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:#FDF6EC;border:1px solid #E8D5B7;border-radius:20px;padding:4px 12px;font-size:0.72rem;color:#D4956A;font-weight:500">
-                    🛡️ 院長の味方として、今日もサポートします！
-                </div>
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:16px;padding:4px 0 16px">
+        {avatar_html}
+        <div>
+            <div style="font-size:1.6rem;font-weight:bold;color:#3D2B1F;line-height:1.2">みりんちゃん</div>
+            <div style="font-size:0.82rem;color:#999;margin-top:3px">CliniCalm — クリニック院長専用 AI 秘書</div>
+            <div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:#FDF6EC;border:1px solid #E8D5B7;border-radius:20px;padding:4px 12px;font-size:0.72rem;color:#D4956A;font-weight:500">
+                🛡️ 院長の味方として、今日もサポートします！
             </div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col_hr:
-        dashboard_f = next(f for f in FEATURES if f["key"] == "dashboard")
-        st.markdown("""
-        <div style="background:white;border:1.5px solid #E8D5B7;border-radius:14px;padding:14px 16px;margin-top:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
-            <div style="font-size:0.72rem;font-weight:bold;color:#D97706;margin-bottom:8px;display:flex;align-items:center;gap:5px">
-                ✨ 今日のおすすめ
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-                <div style="background:#D1FAE5;border-radius:8px;padding:8px;font-size:1.3rem;flex-shrink:0">📊</div>
-                <div style="font-size:0.82rem;color:#3D2B1F;line-height:1.5;flex:1">
-                    経営ダッシュボードで<br>昨日の来院数をチェックしてみましょう
-                </div>
-                <div style="color:#D4956A;font-size:1.1rem">›</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("　", key="rec_dashboard", use_container_width=True, help="経営ダッシュボードを開く", type="primary"):
-            start_feature(dashboard_f)
-            st.rerun()
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── ヒーローバナー ────────────────────────────────────────
     if avatar_url:
@@ -585,6 +638,50 @@ def render_home(avatar_url):
             if st.button(" ", key=f"home_{key}", use_container_width=True):
                 start_feature(f)
                 st.rerun()
+
+    # ── カードボタン非表示＋クリック転送（components.html 経由で JS を確実に実行） ──
+    components.html("""
+<script>
+(function() {
+    var doc = window.parent.document;
+    function hideEl(el) {
+        el.style.setProperty('display',    'none',   'important');
+        el.style.setProperty('height',     '0',      'important');
+        el.style.setProperty('min-height', '0',      'important');
+        el.style.setProperty('margin',     '0',      'important');
+        el.style.setProperty('padding',    '0',      'important');
+        el.style.setProperty('overflow',   'hidden', 'important');
+    }
+    function bindCardToBtn(card, btn) {
+        if (!card || !btn || card._nfcBound) return;
+        var vb = btn.closest('[data-testid="stVerticalBlock"]');
+        if (!vb) return;
+        var toHide = btn;
+        while (toHide.parentElement && toHide.parentElement !== vb) {
+            toHide = toHide.parentElement;
+        }
+        if (toHide.parentElement === vb) { hideEl(toHide); }
+        card._nfcBound = true;
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function() { btn.click(); });
+    }
+    function init() {
+        // 機能カード（baseButton-secondary）
+        doc.querySelectorAll(
+            '[data-testid="stMain"] [data-testid="column"] button[data-testid="baseButton-secondary"]'
+        ).forEach(function(btn) {
+            if (btn._nfcBound) return;
+            btn._nfcBound = true;
+            var vb = btn.closest('[data-testid="stVerticalBlock"]');
+            if (vb) { bindCardToBtn(vb.querySelector('.nfc-card'), btn); }
+        });
+    }
+    setTimeout(init, 300);
+    setTimeout(init, 800);
+    setTimeout(init, 2000);
+})();
+</script>
+""", height=0)
 
     # ── 提案バー（列を使わずボタンがオーバーレイCSSの影響を受けないようにする） ──
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
@@ -661,6 +758,8 @@ def main():
 
     if st.session_state.mode is None:
         render_home(avatar_url)
+    elif st.session_state.mode == "shuukan-dashboard":
+        render_shuukan_dashboard(client, avatar_url)
     else:
         render_chat(client, avatar_url)
 
