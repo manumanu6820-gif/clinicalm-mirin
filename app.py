@@ -6,6 +6,7 @@ import base64
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
+from googleapiclient.discovery import build
 
 load_dotenv()
 
@@ -307,6 +308,116 @@ Q6. 現在飲んでいるお薬はありますか？
 def load_sheet_data(sheets_id: str, sheet_name: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{sheets_id}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
     return pd.read_csv(url)
+
+
+@st.cache_data(ttl=3600)
+def search_youtube_videos(query: str, max_results: int = 6) -> list:
+    api_key = st.secrets.get("YOUTUBE_API_KEY", None) or os.getenv("YOUTUBE_API_KEY")
+    if not api_key:
+        return []
+    try:
+        youtube = build("youtube", "v3", developerKey=api_key)
+        response = youtube.search().list(
+            part="snippet",
+            q=query,
+            type="video",
+            order="date",
+            maxResults=max_results,
+            relevanceLanguage="ja",
+            regionCode="JP",
+        ).execute()
+        videos = []
+        for item in response.get("items", []):
+            snippet = item["snippet"]
+            videos.append({
+                "title":    snippet["title"],
+                "channel":  snippet["channelTitle"],
+                "published": snippet["publishedAt"][:10],
+                "thumbnail": snippet["thumbnails"]["medium"]["url"],
+                "url":      f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+            })
+        return videos
+    except Exception:
+        return []
+
+
+def render_fee(client, avatar_url):
+    st.markdown('<div class="mode-header">📋 診療報酬改定</div>', unsafe_allow_html=True)
+
+    # ── YouTube 動画セクション ───────────────────────────────────
+    st.markdown("#### 📺 最新動画（YouTube）")
+    videos = search_youtube_videos("診療報酬改定 2024 2025 クリニック")
+
+    if videos:
+        cols = st.columns(3)
+        for i, v in enumerate(videos[:6]):
+            with cols[i % 3]:
+                st.markdown(f"""
+                <a href="{v['url']}" target="_blank" style="text-decoration:none;color:inherit">
+                    <div style="border:1.5px solid #EDE8E0;border-radius:12px;overflow:hidden;
+                                background:white;box-shadow:0 2px 8px rgba(0,0,0,0.04);
+                                margin-bottom:12px;transition:box-shadow 0.2s"
+                         onmouseover="this.style.boxShadow='0 4px 16px rgba(212,149,106,0.25)'"
+                         onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.04)'">
+                        <img src="{v['thumbnail']}" style="width:100%;display:block">
+                        <div style="padding:10px 12px">
+                            <div style="font-weight:bold;font-size:0.82rem;color:#1A1A1A;
+                                        line-height:1.4;margin-bottom:4px;
+                                        display:-webkit-box;-webkit-line-clamp:2;
+                                        -webkit-box-orient:vertical;overflow:hidden">
+                                {v['title']}
+                            </div>
+                            <div style="font-size:0.72rem;color:#999">
+                                {v['channel']} · {v['published']}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("YouTubeの動画を表示するには Secrets に `YOUTUBE_API_KEY` を設定してください。")
+
+    st.divider()
+
+    # ── Claude チャットセクション ────────────────────────────────
+    st.markdown("#### 💬 みりんちゃんに質問する")
+    st.caption("改定内容の解説・自院への影響試算・対応策など何でも聞いてください")
+
+    if "fee_messages" not in st.session_state:
+        st.session_state.fee_messages = []
+
+    for msg in st.session_state.fee_messages:
+        avatar = avatar_url or "👩‍💼" if msg["role"] == "assistant" else "👨‍⚕️"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"])
+
+    if user_input := st.chat_input("例）2024年改定で呼吸器内科に影響する点は？"):
+        st.session_state.fee_messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user", avatar="👨‍⚕️"):
+            st.markdown(user_input)
+
+        system = MIRIN_SYSTEM_BASE + """
+あなたは今、診療報酬改定サポートモードです。
+最新の診療報酬改定（2024年・2026年改定）について、クリニック院長の視点で
+わかりやすく解説し、自院への影響・対応策・算定漏れ防止のアドバイスをしてください。
+数字・点数・加算名は正確に伝え、不確かな場合は「確認をお勧めします」と添えてください。
+"""
+        api_messages = [{"role": m["role"], "content": m["content"]}
+                        for m in st.session_state.fee_messages]
+        full_text = ""
+        with st.chat_message("assistant", avatar=avatar_url or "👩‍💼"):
+            placeholder = st.empty()
+            with client.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                system=system,
+                messages=api_messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    full_text += text
+                    placeholder.markdown(full_text + "▌")
+            placeholder.markdown(full_text)
+        st.session_state.fee_messages.append({"role": "assistant", "content": full_text})
 
 
 def render_shuukan_dashboard(client, avatar_url):
@@ -725,6 +836,8 @@ def main():
 
     if st.session_state.mode is None:
         render_home(avatar_url)
+    elif st.session_state.mode == "fee":
+        render_fee(client, avatar_url)
     elif st.session_state.mode == "shuukan-dashboard":
         render_shuukan_dashboard(client, avatar_url)
     else:
