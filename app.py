@@ -94,6 +94,13 @@ FEATURES = [
         "trigger": "集患分析ダッシュボードを開いてください",
         "system_extra": "",
     },
+    {
+        "key": "youtube-library",
+        "label": "📺 YouTube情報庫",
+        "desc": "診療報酬・経営・医療最新情報\nを動画でチェック",
+        "trigger": "YouTube情報庫を開いてください",
+        "system_extra": "",
+    },
 ]
 
 X_RESEARCH_SYSTEM_EXTRA = """
@@ -341,43 +348,74 @@ def search_youtube_videos(query: str, max_results: int = 6) -> list:
         return []
 
 
-def render_fee(client, avatar_url):
-    st.markdown('<div class="mode-header">📋 診療報酬改定</div>', unsafe_allow_html=True)
-
-    # ── YouTube 動画セクション ───────────────────────────────────
-    st.markdown("#### 📺 最新動画（YouTube）")
-    videos = search_youtube_videos("診療報酬改定 2026 クリニック")
-
-    if videos:
-        cols = st.columns(3)
-        for i, v in enumerate(videos[:6]):
-            with cols[i % 3]:
-                st.markdown(f"""
-                <a href="{v['url']}" target="_blank" style="text-decoration:none;color:inherit">
-                    <div style="border:1.5px solid #EDE8E0;border-radius:12px;overflow:hidden;
-                                background:white;box-shadow:0 2px 8px rgba(0,0,0,0.04);
-                                margin-bottom:12px;transition:box-shadow 0.2s"
-                         onmouseover="this.style.boxShadow='0 4px 16px rgba(212,149,106,0.25)'"
-                         onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.04)'">
-                        <img src="{v['thumbnail']}" style="width:100%;display:block">
-                        <div style="padding:10px 12px">
-                            <div style="font-weight:bold;font-size:0.82rem;color:#1A1A1A;
-                                        line-height:1.4;margin-bottom:4px;
-                                        display:-webkit-box;-webkit-line-clamp:2;
-                                        -webkit-box-orient:vertical;overflow:hidden">
-                                {v['title']}
-                            </div>
-                            <div style="font-size:0.72rem;color:#999">
-                                {v['channel']} · {v['published']}
-                            </div>
+def _render_youtube_cards(videos: list):
+    """動画カードを3列グリッドで描画する共通ヘルパー"""
+    if not videos:
+        st.info("動画が見つかりませんでした。キーワードを変えてお試しください。")
+        return
+    cols = st.columns(3)
+    for i, v in enumerate(videos):
+        with cols[i % 3]:
+            st.markdown(f"""
+            <a href="{v['url']}" target="_blank" style="text-decoration:none;color:inherit">
+                <div style="border:1.5px solid #EDE8E0;border-radius:12px;overflow:hidden;
+                            background:white;box-shadow:0 2px 8px rgba(0,0,0,0.04);
+                            margin-bottom:12px;transition:box-shadow 0.2s"
+                     onmouseover="this.style.boxShadow='0 4px 16px rgba(212,149,106,0.25)'"
+                     onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.04)'">
+                    <img src="{v['thumbnail']}" style="width:100%;display:block">
+                    <div style="padding:10px 12px">
+                        <div style="font-weight:bold;font-size:0.82rem;color:#1A1A1A;
+                                    line-height:1.4;margin-bottom:4px;
+                                    display:-webkit-box;-webkit-line-clamp:2;
+                                    -webkit-box-orient:vertical;overflow:hidden">
+                            {v['title']}
+                        </div>
+                        <div style="font-size:0.72rem;color:#999">
+                            {v['channel']} · {v['published']}
                         </div>
                     </div>
-                </a>
-                """, unsafe_allow_html=True)
-    else:
-        st.info("YouTubeの動画を表示するには Secrets に `YOUTUBE_API_KEY` を設定してください。")
+                </div>
+            </a>
+            """, unsafe_allow_html=True)
 
+
+def render_youtube_library(avatar_url):
+    st.markdown('<div class="mode-header">📺 YouTube情報庫</div>', unsafe_allow_html=True)
+
+    TOPICS = {
+        "診療報酬改定 2026": "📋 診療報酬改定 2026",
+        "クリニック 経営 開業医": "💼 クリニック経営",
+        "医療 DX 電子カルテ": "💻 医療DX",
+        "在宅医療 訪問診療": "🏠 在宅医療",
+    }
+
+    tab_labels = list(TOPICS.values())
+    tab_keys   = list(TOPICS.keys())
+    tabs = st.tabs(tab_labels)
+
+    for tab, query in zip(tabs, tab_keys):
+        with tab:
+            with st.spinner("動画を取得中..."):
+                videos = search_youtube_videos(query, max_results=6)
+            _render_youtube_cards(videos)
+
+    # カスタム検索
     st.divider()
+    st.markdown("#### 🔍 キーワードで検索")
+    col_q, col_btn = st.columns([4, 1])
+    with col_q:
+        custom_q = st.text_input("_yt_q", placeholder="例）喘息 治療 最新", label_visibility="collapsed")
+    with col_btn:
+        search_clicked = st.button("検索", use_container_width=True, type="primary")
+    if search_clicked and custom_q:
+        with st.spinner("検索中..."):
+            results = search_youtube_videos(custom_q, max_results=6)
+        _render_youtube_cards(results)
+
+
+def render_fee(client, avatar_url):
+    st.markdown('<div class="mode-header">📋 診療報酬改定</div>', unsafe_allow_html=True)
 
     # ── Claude チャットセクション ────────────────────────────────
     st.markdown("#### 💬 みりんちゃんに質問する")
@@ -654,24 +692,27 @@ def render_home(avatar_url):
         "minutes":    {"emoji": "🎤", "bg": "#FEF3C7"},
         "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
         "shuukan-dashboard":  {"emoji": "📈", "bg": "#D1FAE5"},
+        "youtube-library":    {"emoji": "📺", "bg": "#FFE4E6"},
     }
     LABEL_TEXT = {
-        "interview":  "問診サポート",
-        "document":   "書類下書き",
-        "dashboard":  "経営ダッシュボード",
-        "complaint":  "クレーム返信",
-        "minutes":    "議事録作成",
-        "fee":        "診療報酬改定",
+        "interview":       "問診サポート",
+        "document":        "書類下書き",
+        "dashboard":       "経営ダッシュボード",
+        "complaint":       "クレーム返信",
+        "minutes":         "議事録作成",
+        "fee":             "診療報酬改定",
         "shuukan-dashboard": "集患分析ダッシュボード",
+        "youtube-library": "YouTube情報庫",
     }
     DESC_TEXT = {
-        "interview":  "症状を会話形式で収集し、院長向けサマリー生成",
-        "document":   "紹介状・診断書・主治医意見書をすばやく作成",
-        "dashboard":  "来院数・レセプト・算定漏れアラートで経営を見える化",
-        "complaint":  "Googleレビュー・患者投書の返信案を作成",
-        "minutes":    "朝礼・カンファレンスのメモを議事録に変換",
-        "fee":        "最新の改定情報をクリニックに照らして試算",
+        "interview":       "症状を会話形式で収集し、院長向けサマリー生成",
+        "document":        "紹介状・診断書・主治医意見書をすばやく作成",
+        "dashboard":       "来院数・レセプト・算定漏れアラートで経営を見える化",
+        "complaint":       "Googleレビュー・患者投書の返信案を作成",
+        "minutes":         "朝礼・カンファレンスのメモを議事録に変換",
+        "fee":             "最新の改定情報をクリニックに照らして試算",
         "shuukan-dashboard": "スプシの競合分析結果を表示・みりんちゃんと深掘り分析",
+        "youtube-library": "診療報酬・経営・医療最新情報を動画でチェック",
     }
 
     # ── ヘッダー ──────────────────────────────────────────────
@@ -836,6 +877,8 @@ def main():
 
     if st.session_state.mode is None:
         render_home(avatar_url)
+    elif st.session_state.mode == "youtube-library":
+        render_youtube_library(avatar_url)
     elif st.session_state.mode == "fee":
         render_fee(client, avatar_url)
     elif st.session_state.mode == "shuukan-dashboard":
