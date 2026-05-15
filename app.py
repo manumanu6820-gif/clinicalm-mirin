@@ -346,7 +346,7 @@ def render_fee(client, avatar_url):
 
     # ── YouTube 動画セクション ───────────────────────────────────
     st.markdown("#### 📺 最新動画（YouTube）")
-    videos = search_youtube_videos("診療報酬改定 2024 2025 クリニック")
+    videos = search_youtube_videos("診療報酬改定 2026 クリニック")
 
     if videos:
         cols = st.columns(3)
