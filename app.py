@@ -3,6 +3,10 @@ import anthropic
 from urllib.parse import quote
 import os
 import base64
+import json
+import re
+import requests
+from bs4 import BeautifulSoup
 import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
@@ -99,6 +103,13 @@ FEATURES = [
         "label": "📺 YouTube情報庫",
         "desc": "診療報酬・経営・医療最新情報\nを動画でチェック",
         "trigger": "YouTube情報庫を開いてください",
+        "system_extra": "",
+    },
+    {
+        "key": "review-patrol",
+        "label": "🚨 口コミパトロール",
+        "desc": "主要口コミサイトを巡回\n緊急アラートを自動検出",
+        "trigger": "口コミパトロールを開いてください",
         "system_extra": "",
     },
 ]
@@ -311,6 +322,244 @@ Q6. 現在飲んでいるお薬はありますか？
 ・AI緊急度判定：
 ---
 """
+
+# ── 口コミパトロール ────────────────────────────────────────────
+
+PATROL_SITES = [
+    {"key": "byoin_navi", "name": "病院なび",      "icon": "🏥", "manual": False,
+     "placeholder": "https://byoinnavi.jp/clinic/XXXXX"},
+    {"key": "caloo",      "name": "Caloo（カルー）","icon": "⭐", "manual": False,
+     "placeholder": "https://caloo.jp/hospitals/detail/XXXXX"},
+    {"key": "epark",      "name": "Epark",         "icon": "📋", "manual": False,
+     "placeholder": "https://www.epark.jp/clinic/XXXXX/"},
+    {"key": "google",     "name": "Googleマップ",  "icon": "🗺️", "manual": True,
+     "placeholder": "Googleマップの口コミをコピーして貼り付けてください"},
+]
+
+PATROL_ANALYZE_PROMPT = """
+以下は口コミサイトから取得したテキストです。クリニックへの患者口コミ・レビューを抽出・分析してください。
+
+【サイト名】{site_name}
+【テキスト】
+{text}
+
+以下のJSON形式のみ出力（コードブロック・前置き不要）:
+{{
+  "reviews": [
+    {{
+      "text": "口コミ本文の要約（80字以内）",
+      "urgency": "critical|high|medium|positive",
+      "reason": "判定理由（25字以内）",
+      "action": "推奨アクション（25字以内）"
+    }}
+  ],
+  "summary": "全体サマリー（2文）",
+  "critical_count": 数字,
+  "high_count": 数字
+}}
+
+緊急度基準:
+- critical（緊急対応）: 医療ミス・訴訟・「最悪」「二度と来ない」「許せない」「返金」「弁護士」
+- high（要対応）: 待ち時間・対応が悪い・説明不足・不親切・「不満」「がっかり」
+- medium（要確認）: 軽い不満・改善要望・「残念」「普通」「微妙」
+- positive（良好）: 満足・おすすめ・ありがとう
+
+口コミが見つからない場合は "reviews": [] を返す。
+"""
+
+URGENCY_CONFIG = {
+    "critical": {"icon": "🔴", "label": "緊急対応", "color": "#DC2626", "bg": "#FFF1F2", "border": "#F87171"},
+    "high":     {"icon": "🟠", "label": "要対応",   "color": "#EA580C", "bg": "#FFF7ED", "border": "#FB923C"},
+    "medium":   {"icon": "🟡", "label": "要確認",   "color": "#D97706", "bg": "#FFFBEB", "border": "#FCD34D"},
+    "positive": {"icon": "✅", "label": "良好",     "color": "#16A34A", "bg": "#F0FDF4", "border": "#86EFAC"},
+}
+
+
+def fetch_page_text(url: str) -> tuple:
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "ja,en;q=0.9",
+        }
+        res = requests.get(url, headers=headers, timeout=12)
+        res.raise_for_status()
+        res.encoding = res.apparent_encoding
+        soup = BeautifulSoup(res.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return True, text[:6000]
+    except Exception as e:
+        return False, str(e)
+
+
+def analyze_reviews(client, site_name: str, text: str) -> dict:
+    prompt = PATROL_ANALYZE_PROMPT.format(site_name=site_name, text=text)
+    try:
+        res = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = res.content[0].text
+        match = re.search(r'\{[\s\S]*\}', raw)
+        if match:
+            return json.loads(match.group())
+    except Exception:
+        pass
+    return {"reviews": [], "summary": "解析できませんでした", "critical_count": 0, "high_count": 0}
+
+
+def render_review_patrol(client, avatar_url):
+    from datetime import datetime
+
+    st.markdown('<div class="mode-header">🚨 口コミパトロール</div>', unsafe_allow_html=True)
+
+    if "patrol_urls" not in st.session_state:
+        st.session_state.patrol_urls = {s["key"]: "" for s in PATROL_SITES}
+    if "patrol_results" not in st.session_state:
+        st.session_state.patrol_results = []
+
+    # ── URL設定 ──
+    with st.expander("⚙️ 各サイトのURL・口コミを設定", expanded=not any(st.session_state.patrol_urls.values())):
+        st.caption("各口コミサイトであなたのクリニックのページURLを入力してください")
+        for site in PATROL_SITES:
+            key = site["key"]
+            if site["manual"]:
+                val = st.text_area(
+                    f"{site['icon']} {site['name']}（手動貼り付け）",
+                    value=st.session_state.patrol_urls.get(key, ""),
+                    placeholder=site["placeholder"],
+                    height=90,
+                    key=f"patrol_input_{key}",
+                )
+            else:
+                val = st.text_input(
+                    f"{site['icon']} {site['name']}",
+                    value=st.session_state.patrol_urls.get(key, ""),
+                    placeholder=site["placeholder"],
+                    key=f"patrol_input_{key}",
+                )
+            st.session_state.patrol_urls[key] = val
+
+        if st.button("✅ 設定を保存", type="primary", key="save_patrol"):
+            st.success("保存しました！")
+
+    # ── パトロールボタン ──
+    active = [s for s in PATROL_SITES if st.session_state.patrol_urls.get(s["key"])]
+    if not active:
+        st.info("⚙️ まず上の「URL設定」からサイトURLを入力してください")
+        return
+
+    col_btn, col_ts = st.columns([3, 1])
+    with col_btn:
+        patrol_clicked = st.button("🔍 今すぐパトロール", type="primary", use_container_width=True)
+    with col_ts:
+        st.caption(f"最終巡回:\n{st.session_state.get('patrol_last_run', '未実行')}")
+
+    if patrol_clicked:
+        st.session_state.patrol_results = []
+        progress = st.progress(0, text="巡回中...")
+        for i, site in enumerate(active):
+            progress.progress((i + 1) / len(active), text=f"{site['name']} を確認中...")
+            url_or_text = st.session_state.patrol_urls.get(site["key"], "")
+            if site["manual"]:
+                success, text = True, url_or_text
+            else:
+                success, text = fetch_page_text(url_or_text)
+
+            if not success:
+                st.session_state.patrol_results.append({"site": site, "error": text, "data": None})
+                continue
+            data = analyze_reviews(client, site["name"], text)
+            st.session_state.patrol_results.append({"site": site, "error": None, "data": data})
+
+        progress.empty()
+        st.session_state.patrol_last_run = datetime.now().strftime("%Y/%m/%d %H:%M")
+        st.rerun()
+
+    # ── 結果表示 ──
+    if not st.session_state.patrol_results:
+        return
+
+    results = st.session_state.patrol_results
+    total_critical = sum(r["data"].get("critical_count", 0) for r in results if r["data"])
+    total_high     = sum(r["data"].get("high_count", 0)     for r in results if r["data"])
+
+    if total_critical > 0:
+        st.markdown(f"""
+        <div style="background:#FFF1F2;border:2px solid #F87171;border-radius:12px;
+                    padding:16px 20px;margin:16px 0">
+            <div style="font-weight:bold;color:#DC2626;font-size:1rem">
+                🚨 緊急対応が必要な口コミが {total_critical} 件あります
+            </div>
+            <div style="color:#7F1D1D;font-size:0.82rem;margin-top:4px">
+                早急に確認・返信してください
+            </div>
+        </div>""", unsafe_allow_html=True)
+    elif total_high > 0:
+        st.markdown(f"""
+        <div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;
+                    padding:16px 20px;margin:16px 0">
+            <div style="font-weight:bold;color:#EA580C;font-size:1rem">
+                ⚠️ 要対応の口コミが {total_high} 件あります
+            </div>
+            <div style="color:#9A3412;font-size:0.82rem;margin-top:4px">
+                確認・対応をお勧めします
+            </div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        st.success("✅ 緊急・要対応の口コミは見つかりませんでした")
+
+    for result in results:
+        site = result["site"]
+        st.markdown(f"#### {site['icon']} {site['name']}")
+
+        if result["error"]:
+            st.error(f"取得エラー: {result['error']}")
+            continue
+
+        data = result["data"]
+        if not data or not data.get("reviews"):
+            st.info("口コミが見つかりませんでした（URLが正しいか確認してください）")
+            st.divider()
+            continue
+
+        st.caption(data.get("summary", ""))
+
+        for idx, review in enumerate(data["reviews"]):
+            urgency = review.get("urgency", "medium")
+            cfg = URGENCY_CONFIG.get(urgency, URGENCY_CONFIG["medium"])
+            st.markdown(f"""
+            <div style="background:{cfg['bg']};border:1.5px solid {cfg['border']};
+                        border-radius:10px;padding:14px 16px;margin-bottom:10px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span>{cfg['icon']}</span>
+                    <span style="font-weight:bold;color:{cfg['color']};font-size:0.82rem">
+                        {cfg['label']}
+                    </span>
+                    <span style="color:#64748b;font-size:0.75rem;margin-left:auto">
+                        {review.get('reason', '')}
+                    </span>
+                </div>
+                <div style="font-size:0.9rem;color:#1e293b;line-height:1.7;margin-bottom:8px">
+                    {review.get('text', '')}
+                </div>
+                <div style="font-size:0.78rem;color:#475569">
+                    💡 推奨: {review.get('action', '')}
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+            if urgency in ("critical", "high"):
+                if st.button("✍️ 返信を作成", key=f"reply_{site['key']}_{idx}"):
+                    st.session_state.mode = "complaint"
+                    st.session_state.messages = [{"role": "user", "content": f"この口コミへの返信案を3つ作ってください：\n\n{review.get('text', '')}"}]
+                    st.session_state.need_response = True
+                    st.rerun()
+
+        st.divider()
+
 
 def load_sheet_data(sheets_id: str, sheet_name: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{sheets_id}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
@@ -693,6 +942,7 @@ def render_home(avatar_url):
         "fee":        {"emoji": "📋", "bg": "#E0F2FE"},
         "shuukan-dashboard":  {"emoji": "📈", "bg": "#D1FAE5"},
         "youtube-library":    {"emoji": "📺", "bg": "#FFE4E6"},
+        "review-patrol":      {"emoji": "🚨", "bg": "#FFF1F2"},
     }
     LABEL_TEXT = {
         "interview":       "問診サポート",
@@ -703,6 +953,7 @@ def render_home(avatar_url):
         "fee":             "診療報酬改定",
         "shuukan-dashboard": "集患分析ダッシュボード",
         "youtube-library": "YouTube情報庫",
+        "review-patrol":   "口コミパトロール",
     }
     DESC_TEXT = {
         "interview":       "症状を会話形式で収集し、院長向けサマリー生成",
@@ -713,6 +964,7 @@ def render_home(avatar_url):
         "fee":             "最新の改定情報をクリニックに照らして試算",
         "shuukan-dashboard": "スプシの競合分析結果を表示・みりんちゃんと深掘り分析",
         "youtube-library": "診療報酬・経営・医療最新情報を動画でチェック",
+        "review-patrol":   "主要口コミサイトを巡回・緊急アラートを自動検出",
     }
 
     # ── ヘッダー ──────────────────────────────────────────────
@@ -883,6 +1135,8 @@ def main():
         render_fee(client, avatar_url)
     elif st.session_state.mode == "shuukan-dashboard":
         render_shuukan_dashboard(client, avatar_url)
+    elif st.session_state.mode == "review-patrol":
+        render_review_patrol(client, avatar_url)
     else:
         render_chat(client, avatar_url)
 
