@@ -398,7 +398,7 @@ def analyze_reviews(client, site_name: str, text: str) -> dict:
     prompt = PATROL_ANALYZE_PROMPT.format(site_name=site_name, text=text)
     try:
         res = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5",   # 分類作業のみ → Haiku で十分
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -683,7 +683,7 @@ def render_fee(client, avatar_url):
         with st.chat_message("user", avatar="👨‍⚕️"):
             st.markdown(user_input)
 
-        system = MIRIN_SYSTEM_BASE + """
+        fee_extra = """
 あなたは今、診療報酬改定サポートモードです。
 最新の診療報酬改定（2024年・2026年改定）について、クリニック院長の視点で
 わかりやすく解説し、自院への影響・対応策・算定漏れ防止のアドバイスをしてください。
@@ -697,8 +697,9 @@ def render_fee(client, avatar_url):
             with client.messages.stream(
                 model="claude-sonnet-4-6",
                 max_tokens=2048,
-                system=system,
+                system=make_cached_system(MIRIN_SYSTEM_BASE, fee_extra),
                 messages=api_messages,
+                extra_headers=_CACHE_HEADER,
             ) as stream:
                 for text in stream.text_stream:
                     full_text += text
@@ -774,7 +775,7 @@ def render_shuukan_dashboard(client, avatar_url):
             with st.chat_message("user", avatar="👨‍⚕️"):
                 st.markdown(user_input)
 
-            system = MIRIN_SYSTEM_BASE + f"""
+            dashboard_extra = f"""
 あなたは今、集患分析ダッシュボードモードです。
 以下のスプレッドシートデータをもとに、院長先生の質問に答えてください。
 
@@ -788,8 +789,9 @@ def render_shuukan_dashboard(client, avatar_url):
                 with client.messages.stream(
                     model="claude-sonnet-4-6",
                     max_tokens=2048,
-                    system=system,
+                    system=make_cached_system(MIRIN_SYSTEM_BASE, dashboard_extra),
                     messages=api_messages,
+                    extra_headers=_CACHE_HEADER,
                 ) as stream:
                     for text in stream.text_stream:
                         full_text += text
@@ -875,23 +877,48 @@ FEATURE_SYSTEMS = {
     "x-research": X_RESEARCH_SYSTEM_EXTRA,
 }
 
+# ── コスト最適化設定 ──────────────────────────────────────────
+# 医療判断・専門知識が必要な機能は Sonnet、定型作業は Haiku で約37倍コスト削減
+FEATURE_MODELS = {
+    "interview":         "claude-sonnet-4-6",  # 医療判断が必要 → Sonnet
+    "document":          "claude-haiku-4-5",   # テンプレ埋め → Haiku
+    "dashboard":         "claude-haiku-4-5",   # 数値確認 → Haiku
+    "complaint":         "claude-haiku-4-5",   # 定型文生成 → Haiku
+    "minutes":           "claude-haiku-4-5",   # 整形作業 → Haiku
+    "fee":               "claude-sonnet-4-6",  # 医療制度の専門知識 → Sonnet
+    "shuukan-dashboard": "claude-sonnet-4-6",  # 複雑な分析 → Sonnet
+    "x-research":        "claude-sonnet-4-6",  # 複合リサーチ → Sonnet
+    "suggest":           "claude-haiku-4-5",   # 機能提案 → Haiku
+    "review-patrol":     "claude-haiku-4-5",   # 分類作業 → Haiku
+}
+_DEFAULT_MODEL = "claude-haiku-4-5"
+_CACHE_HEADER = {"anthropic-beta": "prompt-caching-2024-07-31"}
+
+
+def make_cached_system(base: str, extra: str = "") -> list:
+    """MIRIN_SYSTEM_BASE にキャッシュ制御を付与してリスト形式で返す。
+    2回目以降の呼び出しでベースプロンプトのトークン費用が約90%削減される。"""
+    parts = [{"type": "text", "text": base, "cache_control": {"type": "ephemeral"}}]
+    if extra:
+        parts.append({"type": "text", "text": extra})
+    return parts
+
 
 def stream_response(client, messages, feature_key, avatar_url):
     feature = next((f for f in FEATURES if f["key"] == feature_key), None)
-    system = MIRIN_SYSTEM_BASE
     extra = FEATURE_SYSTEMS.get(feature_key) or (feature["system_extra"] if feature else "")
-    if extra:
-        system += f"\n{extra}"
+    model = FEATURE_MODELS.get(feature_key, _DEFAULT_MODEL)
 
     api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
     full_text = ""
     with st.chat_message("assistant", avatar=avatar_url or "👩‍💼"):
         placeholder = st.empty()
         with client.messages.stream(
-            model="claude-sonnet-4-6",
+            model=model,
             max_tokens=2048,
-            system=system,
+            system=make_cached_system(MIRIN_SYSTEM_BASE, extra),
             messages=api_messages,
+            extra_headers=_CACHE_HEADER,
         ) as stream:
             for text in stream.text_stream:
                 full_text += text
@@ -906,7 +933,6 @@ def stream_response_with_search(client, messages, feature_key, avatar_url):
     """Anthropic web_search beta を使った応答（x-research 専用）。
     beta が使えない環境では通常の stream_response にフォールバックする。"""
     extra = FEATURE_SYSTEMS.get(feature_key, "")
-    system = MIRIN_SYSTEM_BASE + (f"\n{extra}" if extra else "")
     api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
 
     full_text = ""
@@ -917,10 +943,10 @@ def stream_response_with_search(client, messages, feature_key, avatar_url):
             with client.beta.messages.stream(
                 model="claude-sonnet-4-6",
                 max_tokens=4096,
-                system=system,
+                system=make_cached_system(MIRIN_SYSTEM_BASE, extra),
                 messages=api_messages,
                 tools=[{"type": "web_search_20250305", "name": "web_search"}],
-                betas=["web-search-2025-03-05"],
+                betas=["web-search-2025-03-05", "prompt-caching-2024-07-31"],
             ) as stream:
                 for text in stream.text_stream:
                     full_text += text
